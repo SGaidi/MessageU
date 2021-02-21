@@ -25,3 +25,7 @@ class MessageValidationError(ValidationError):
 class ClientAppInvalidRequestError(ValueError):
     """Raised when ClientApp receives invalid request from user."""
     pass
+
+
+class RequestException(Exception):
+    """Raised when an exception with request occurred."""

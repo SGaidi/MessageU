@@ -140,7 +140,7 @@ class ServerApp:
             raise exceptions.MessageValidationError()
 
     def _pull_messages(self, request):
-        # TODO: with lock
+        # TODO: with lock?
         messages = Message.objects.filter(to_client=request.client)
         # TODO: convert data to other type
         Message.objects.all().delete()

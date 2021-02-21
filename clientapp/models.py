@@ -36,9 +36,11 @@ class ClientApp:
         pass
 
     def _get_public_key(self):
-        pass
+        name = input("Enter client name: ")
 
-    def _pull_messages(self):
+        return "public-key"
+
+    def _pop_messages(self):
         try:
             # TODO: get messages
             messages = "blah"
@@ -46,19 +48,19 @@ class ClientApp:
             pass
 
         for message in messages:
-            contact_name = message.from_client.name
+            other_client_name = message.from_client.name
             # TODO: keys messages should display differently
             print(
-                """From: {contact_name}
+                """From: {other_client_name}
                 Content:
                 {content}
                 -----<EOM>-----
-                """.format(contact_name=contact_name,
+                """.format(other_client_name=other_client_name,
                            content=message.content))
 
     def _push_message(self):
-        name = input("Enter contact name:")
-        message = input("Enter message:")
+        name = input("Enter client name: ")
+        message = input("Enter message: ")
         try:
             pass
             # TODO: send request
@@ -66,8 +68,8 @@ class ClientApp:
             pass
 
     def _push_file(self):
-        name = input("Enter contact name:")
-        pathname = input("Enter pathname:")
+        name = input("Enter client name: ")
+        pathname = input("Enter pathname: ")
         if not os.path.exists(pathname):
             raise exceptions.ClientAppInvalidRequestError(
                 f"No file at: {pathname}")
@@ -101,7 +103,7 @@ class ClientApp:
         1: _register,
         2: _list_clients,
         3: _get_public_key,
-        4: _pull_messages,
+        4: _pop_messages,
         5: _push_message,
         50: _push_file,
         51: _request_symmetric_key,
