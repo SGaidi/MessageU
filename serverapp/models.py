@@ -6,6 +6,7 @@ from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
 from enumchoicefield import EnumChoiceField, ChoiceEnum
 from django.core.management import call_command
+from django.core.exceptions import ValidationError
 
 from mysite import exceptions
 
@@ -21,7 +22,8 @@ class Client(models.Model):
         primary_key=True, help_text="Unique identifier",
         validators=[MinValueValidator(0), MaxValueValidator(2**128 - 1)])
     # Python strings are UTF-8, because ASCII is a subset of UTF-8, it's valid
-    name = models.CharField(max_length=255, help_text="Client's provided name")
+    name = models.CharField(
+        max_length=255, help_text="Client's provided name", unique=True)
     public_key = models.BinaryField(
         max_length=160,
         help_text="Client's provided public-key used in message sending")
@@ -61,17 +63,39 @@ class ServerApp:
     clients = []
     messages = []
 
-    @classmethod
-    def _init_db(cls):
+    @staticmethod
+    def _init_db():
         logging.info("migrate")
         with StringIO() as out:
-            call_command("migrate", stdout=out)
-            # TODO: flip the order of migrations?
-            logging.info(out.getvalue())
             call_command("makemigrations", "serverapp", stdout=out)
             logging.info(out.getvalue())
-            call_command("sqlmigrate", "serverapp", "0001", stdout=out)
+            call_command("migrate", stdout=out)
             logging.info(out.getvalue())
+            call_command("sqlmigrate", "serverapp", "0001", stdout=out)
+
+    @staticmethod
+    def _create_superuser():
+        import os
+        os.environ.setdefault('DJANGO_SUPERUSER_USERNAME', 'admin')
+        os.environ.setdefault('DJANGO_SUPERUSER_PASSWORD', 'admin')
+        os.environ.setdefault('DJANGO_SUPERUSER_EMAIL',
+                              'gaidi.sarah@gmail.com')
+        with StringIO() as out:
+            call_command("createsuperuser", "--noinput", stdout=out)
+
+    @staticmethod
+    def _run_django_server():
+        import os
+        os.system("python manage.py runserver")
+
+    @staticmethod
+    def _start_django_server():
+        import threading
+        thread = threading.Thread(
+            target=ServerApp._run_django_server,
+            name="Run Django Server",
+        )
+        thread.start()
 
     @staticmethod
     def _read_port() -> int:
@@ -95,11 +119,34 @@ class ServerApp:
         return port
 
     def __init__(self):
-        logging.warning("HELLO")
-        self._init_db()
+        ServerApp._init_db()
+        ServerApp._create_superuser()
+        ServerApp._start_django_server()
         self.port = ServerApp._read_port()
 
-    def respond(self):
+    def _register_client(self, request):
+        try:
+            client = Client.objects.create()
+        except ValidationError as e:
+            raise exceptions.ClientValidationError()
+
+    def _list_clients(self, request):
+        return Client.objects.all()
+
+    def _push_message(self, request):
+        try:
+            message = Message.objects.create()
+        except ValidationError as e:
+            raise exceptions.MessageValidationError()
+
+    def _pull_messages(self, request):
+        # TODO: with lock
+        messages = Message.objects.filter(to_client=request.client)
+        # TODO: convert data to other type
+        Message.objects.all().delete()
+        return messages
+
+    def _respond(self, request):
         # TODO: encrypt E2E
         pass
 
@@ -111,11 +158,12 @@ class ServerApp:
 
         while True:
             try:
-                #request = ...
+                request = "something"
                 import time
                 time.sleep(1)
+                self._respond(request)
                 logging.info("waiting")
             except Exception as e:
-                self.logger.exception(f"something happened: {e}")
+                logging.exception(f"something happened: {e}")
             else:
-                self.logger.info(f"handled request successfully")
+                logging.info(f"handled request successfully")

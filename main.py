@@ -1,18 +1,4 @@
-import os
-import sys
 import argparse
-import pathlib
-
-import django
-
-
-sys.path.append(pathlib.Path(__file__).resolve().parent)
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'mysite.settings')
-django.setup()
-
-
-from serverapp.models import ServerApp  # noqa
-from clientapp.models import ClientApp  # noqa
 
 
 if __name__ == "__main__":
@@ -26,8 +12,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.run == "server":
-        server = ServerApp()
-        # server.run()
+        from serverapp import main
     else:  # args.run == "client":
-        client = ClientApp()
-        client.run()
+        from clientapp import main
+
+    main.run()
