@@ -75,3 +75,11 @@ class PopMessagesResponse(Response):
                 message_type_bytes
             messages_bytes += message_bytes
         super(PopMessagesResponse, self).__init__(payload=messages_bytes)
+
+
+class ErrorResponse(Response):
+
+    CODE = 9000
+
+    def __init__(self):
+        super(ErrorResponse, self).__init__(payload=b'')
