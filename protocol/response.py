@@ -1,14 +1,17 @@
 from abc import ABC
 from typing import Tuple
 
-from protocol.base import Base
+from protocol.packetbase import PacketBase
 
 
-class Response(Base, ABC):
+class Response(PacketBase, ABC):
+
+    FIELDS_TO_TYPE_AND_LENGTH = dict(PacketBase.FIELDS_TO_TYPE_AND_LENGTH)
+    FIELDS_TO_TYPE_AND_LENGTH.update({
+        'code': (int, 2),
+    })
 
     VERSION = 2
-    VERSION_LENGTH = 1
-    CODE_LENGTH = 2
     MESSAGE_ID_LENGTH = 4
 
     def __str__(self):
