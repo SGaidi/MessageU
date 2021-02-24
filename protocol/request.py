@@ -13,6 +13,10 @@ class Request(PacketBase, metaclass=abc.ABCMeta):
 
     VERSION = 2
 
+    HEADER_FIELDS = (
+        'client_id', 'version', 'code', 'payload_size',
+    )
+
     def __init__(self, sender_client_id: int = 0, payload: bytes = b''):
         """
         Initializes request with sender client ID and passes payload to base

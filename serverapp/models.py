@@ -18,7 +18,7 @@ class Client(models.Model):
         help_text="Client's provided public-key used in message sending")
     last_seen = models.DateTimeField(
         null=True, blank=True,
-        help_text="The last date and time the serverapp received a request "
+        help_text="The last date and time the server received a request "
                   "from the client")
 
 

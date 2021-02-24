@@ -29,3 +29,10 @@ class ClientAppInvalidRequestError(ValueError):
 
 class RequestException(Exception):
     """Raised when an exception with request occurred."""
+    pass
+
+
+class ConnectionException(Exception):
+    """Raised when an exception with connection occurred."""
+    pass
+

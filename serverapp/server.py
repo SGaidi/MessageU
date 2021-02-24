@@ -105,7 +105,7 @@ class ServerApp:
                 logging.exception(f"something happened: {e}")
             else:
                 thread = threading.Thread(
-                    target=Connection.handle_request,
+                    target=Connection.handle,
                     name="Handle Client Connection",
                     args=(client_socket, address),
                 )

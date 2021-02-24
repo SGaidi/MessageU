@@ -1,5 +1,5 @@
 import abc
-from typing import Union
+from typing import Union, Tuple
 
 
 class PacketBase(metaclass=abc.ABCMeta):
@@ -13,10 +13,12 @@ class PacketBase(metaclass=abc.ABCMeta):
         different code.
     """
 
+    PAYLOAD_SIZE_LENGTH = 4
+
     FIELDS_TO_TYPE_AND_LENGTH = {
         'client_id': (int, 16),
         'version': (int, 1),
-        'payload_size': (int, 4),
+        'payload_size': (int, PAYLOAD_SIZE_LENGTH),
         'name': (str, 255),
         'public_key': (bytes, 160),
         'message_type': (int, 1),
@@ -28,6 +30,18 @@ class PacketBase(metaclass=abc.ABCMeta):
     @property
     @abc.abstractmethod
     def CODE(self) -> int: pass
+    @property
+    @abc.abstractmethod
+    def HEADER_FIELDS(self) -> Tuple[str]: pass
+
+    HEADER_FIELDS_TO_TYPE_AND_LENGTH = {
+        field for field in FIELDS_TO_TYPE_AND_LENGTH if field in HEADER_FIELDS
+    }
+
+    HEADER_LENGTH = sum(
+        header_field[1]
+        for header_field in HEADER_FIELDS_TO_TYPE_AND_LENGTH
+    )
 
     @classmethod
     def _int_to_bytes(cls, name: str, value: int, length: int) -> bytes:

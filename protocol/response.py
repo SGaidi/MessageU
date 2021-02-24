@@ -14,6 +14,10 @@ class Response(PacketBase, metaclass=abc.ABCMeta):
 
     VERSION = 2
 
+    HEADER_FIELDS = (
+        'version', 'code', 'payload_size',
+    )
+
 
 class RegisterSuccessfulResponse(Response):
 
