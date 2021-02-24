@@ -1,17 +1,17 @@
 import enum
-import socket
+import asyncio
 import logging
-import threading
+import socket
+import socketserver
 from io import StringIO
 
 from django.core.management import call_command
 from django.core.management.base import CommandError
 
 from mysite import exceptions
-from serverapp.connection import Connection
+from serverapp.serversideconnection import ServerSideConnection
 
 
-socket.setdefaulttimeout(30)
 logging.getLogger().setLevel(logging.DEBUG)
 
 
@@ -59,6 +59,7 @@ class ServerApp:
 
     @staticmethod
     def _start_django_server():
+        import threading
         thread = threading.Thread(
             target=ServerApp._run_django_server,
             name="Run Django Server",
@@ -90,26 +91,10 @@ class ServerApp:
         ServerApp._init_db()
         ServerApp._create_superuser()
         ServerApp._start_django_server()
+        self.host = socket.gethostname()
         self.port = ServerApp._read_port()
-        self.socket = socket.socket()
 
     def run(self):
-        host = socket.gethostname()
-        self.socket.bind((host, self.port))
-        self.socket.listen(ServerApp.SOCKET_BACKLOG)
-
-        while True:
-            try:
-                client_socket, address = self.socket.accept()
-            except Exception as e:
-                logging.exception(f"something happened: {e}")
-            else:
-                thread = threading.Thread(
-                    target=Connection.handle,
-                    name="Handle Client Connection",
-                    args=(client_socket, address),
-                )
-                thread.start()
-                logging.info(f"handled request successfully")
-
-        self.socket.close()
+        with socketserver.TCPServer((self.host, self.port),
+                                    ServerSideConnection) as server:
+            server.serve_forever()

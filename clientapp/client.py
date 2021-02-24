@@ -1,6 +1,10 @@
 import os
+import socket
+from typing import Tuple
 
 from mysite import exceptions
+from clientapp.clientsideconnection import ClientSideConnection
+from protocol.request import Request, RegisterRequest
 
 
 class OtherClient:
@@ -13,24 +17,58 @@ class ClientApp:
 
     VERSION = 2
     ME_FILENAME = 'me.info'
+    SERVER_FILENAME = 'server.info'
 
-    def __send_message(self):
-        # TODO: TCP, unsigned, little-endian
-        pass
+    @staticmethod
+    def _read_server_host_and_port() -> Tuple[str, int]:
+        # TODO: add BASE_URL
+        with open(ClientApp.SERVER_FILENAME) as file:
+            try:
+                content = file.read()
+            except IOError as e:
+                raise exceptions.ClientAppEnvironmentException(
+                    f"Could not read port file {ClientApp.SERVER_FILENAME}: {e}")
+        try:
+            host, port = content.strip().split(':')
+            port = int(port)
+        except ValueError as e:
+            raise exceptions.ServerAppConfigurationError(
+                f"Invalid port format: {content}. Should be an integer.")
+        # TODO: validate host and port format
+        # if not (ServerApp.MIN_PORT <= port <= ServerApp.MAX_PORT):
+        #     raise exceptions.ServerAppConfigurationError(
+        #         f"Invalid port ({port}), "
+        #         f"not in range: ({ServerApp.MIN_PORT}, {ServerApp.MAX_PORT})"
+        #     )
+        return host, port
+
+    def __init__(self):
+        self.host, self.port = self._read_server_host_and_port()
+        self.connection = ClientSideConnection(self.host, self.port)
+
+    def __send(self, request: Request):
+        request_bytes = request.create()
+
+        try:
+            self.connection.socket.send(request_bytes)
+        except Exception as e:
+            raise exceptions.ConnectionException(f"connection: {e}")
+        else:
+            print("LISTENING")
+            res = self.connection.socket.recv(1)
+            return res
 
     def _register(self) -> str:
         if os.path.exists(ClientApp.ME_FILENAME):
             raise exceptions.ClientAppInvalidRequestError(
                 f"User is already defined in {ClientApp.ME_FILENAME}.")
         name = input("Enter your name: ")
-        public_key = input("Enter your public-key: ")
-        try:
-            id = self.__send_message()
-            # TODO: send request
-        except Exception:
-            pass
+        public_key = input("Enter your public-key: ").encode().zfill(160)
+        # TODO: validate public key
+        request = RegisterRequest(name=name, public_key=public_key)
+        id = self.__send(request)
         return f"Successfully registered '{name}' " \
-               f"with public-key {public_key}. You ID is {id}."
+               f"with public-key {public_key}. Your ID is {id}."
 
     def _list_clients(self):
         pass

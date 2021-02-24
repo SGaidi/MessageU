@@ -1,5 +1,12 @@
 import abc
-from typing import Union, Tuple
+from typing import Union, Tuple, Dict
+
+
+class classproperty(object):
+    def __init__(self, f):
+        self.f = f
+    def __get__(self, obj, owner):
+        return self.f(owner)
 
 
 class PacketBase(metaclass=abc.ABCMeta):
@@ -34,21 +41,28 @@ class PacketBase(metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def HEADER_FIELDS(self) -> Tuple[str]: pass
 
-    HEADER_FIELDS_TO_TYPE_AND_LENGTH = {
-        field for field in FIELDS_TO_TYPE_AND_LENGTH if field in HEADER_FIELDS
-    }
+    @classproperty
+    def HEADER_FIELDS_TO_TYPE_AND_LENGTH(cls) -> Dict[str, Tuple[type, int]]:
+        return {
+            field: value for field, value in
+            cls.FIELDS_TO_TYPE_AND_LENGTH.items()
+            if field in cls.HEADER_FIELDS
+        }
 
-    HEADER_LENGTH = sum(
-        header_field[1]
-        for header_field in HEADER_FIELDS_TO_TYPE_AND_LENGTH
-    )
+    @classproperty
+    def HEADER_LENGTH(cls) -> int:
+        return sum(
+            header_field[1]
+            for header_field in cls.HEADER_FIELDS_TO_TYPE_AND_LENGTH.values()
+        )
 
     @classmethod
     def _int_to_bytes(cls, name: str, value: int, length: int) -> bytes:
-        max_value = 2 ** length - 1
+        bits_count = length * 8
+        max_value = 2 ** bits_count - 1
         if value > max_value:
             raise ValueError(
-                f"'{name}' value '{value}' exceeds the {length} "
+                f"{name!r} value {value!r} exceeds the {length!r} "
                 f"bytes length of field.")
         return value.to_bytes(
             length=length,
@@ -74,9 +88,11 @@ class PacketBase(metaclass=abc.ABCMeta):
                 f"bytes length of field.")
         return value
 
-    @classmethod
     def field_to_bytes(cls, name: str, value: Union[int, str]) -> bytes:
-        field_type, length = cls.FIELDS_TO_TYPE_AND_LENGTH[name]
+        try:
+            field_type, length = cls.FIELDS_TO_TYPE_AND_LENGTH[name]
+        except Exception as e:
+            raise Exception(f"Look!!! {e}")
         if field_type is int:
             return cls._int_to_bytes(name, value, length)
         elif field_type is str:
@@ -93,9 +109,9 @@ class PacketBase(metaclass=abc.ABCMeta):
         Args:
             payload: packet payload in bytes
         """
-        self.version_bytes = PacketBase.field_to_bytes('version', self.VERSION)
-        self.code_bytes = PacketBase.field_to_bytes('code', self.CODE)
-        self.payload_size_bytes = PacketBase.field_to_bytes(
+        self.version_bytes = self.field_to_bytes('version', self.VERSION)
+        self.code_bytes = self.field_to_bytes('code', self.CODE)
+        self.payload_size_bytes = self.field_to_bytes(
             'payload_size', len(payload))
         self.payload = payload
 

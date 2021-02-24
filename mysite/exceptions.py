@@ -12,6 +12,11 @@ class ServerAppConfigurationError(ValueError):
     pass
 
 
+class ClientAppEnvironmentException(ValueError):
+    """Raised when ClientApp configuration file contents are invalid."""
+    pass
+
+
 class ClientValidationError(ValidationError):
     """Raised when Client failed validation upon save."""
     pass

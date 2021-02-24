@@ -1,4 +1,4 @@
-from clientapp.models import ClientApp
+from clientapp.client import ClientApp
 
 
 def run():
