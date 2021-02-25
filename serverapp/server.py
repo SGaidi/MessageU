@@ -1,5 +1,4 @@
 import enum
-import asyncio
 import logging
 import socket
 import socketserver
@@ -8,7 +7,7 @@ from io import StringIO
 from django.core.management import call_command
 from django.core.management.base import CommandError
 
-from mysite import exceptions
+from protocol import exceptions
 from serverapp.serversideconnection import ServerSideConnection
 
 

@@ -6,11 +6,11 @@ import django
 
 
 sys.path.append(pathlib.Path(__file__).resolve().parent)
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'mysite.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'serverdb.settings')
 django.setup()
 
 
-from serverapp.models import ServerApp  # noqa
+from serverapp.server import ServerApp
 
 
 def run():

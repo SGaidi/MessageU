@@ -3,7 +3,7 @@ import socketserver
 
 from django.core.exceptions import ValidationError
 
-from mysite import exceptions
+from protocol import exceptions
 from serverapp.models import Client, Message
 from protocol.request import Request
 

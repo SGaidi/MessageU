@@ -1,8 +1,7 @@
 import os
-import socket
 from typing import Tuple
 
-from mysite import exceptions
+from protocol import exceptions
 from clientapp.clientsideconnection import ClientSideConnection
 from protocol.request import Request, RegisterRequest
 
