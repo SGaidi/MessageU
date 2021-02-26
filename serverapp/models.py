@@ -7,9 +7,6 @@ class Client(models.Model):
 
     # TODO: override tables names
 
-    id = models.PositiveIntegerField(
-        primary_key=True, help_text="Unique identifier",
-        validators=[MinValueValidator(0), MaxValueValidator(2**128 - 1)])
     # Python strings are UTF-8, because ASCII is a subset of UTF-8, it's valid
     name = models.CharField(
         max_length=255, help_text="Client's provided name", unique=True)

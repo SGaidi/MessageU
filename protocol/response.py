@@ -19,19 +19,25 @@ class Response(PacketBase, metaclass=abc.ABCMeta):
     )
 
 
-class RegisterSuccessfulResponse(Response):
+class RegisterResponse(Response):
 
     CODE = 1000
 
+    PAYLOAD_FIELDS = ('client_id', )
+
     def __init__(self, new_client_id: int):
         new_client_id_bytes = self.field_to_bytes('client_id', new_client_id)
-        super(RegisterSuccessfulResponse, self).__init__(
+        super(RegisterResponse, self).__init__(
             payload=new_client_id_bytes)
 
 
 class ListClientsResponse(Response):
 
     CODE = 1001
+
+    PAYLOAD_FIELDS = ('client_id', 'name', )
+
+    PAYLOAD_FIELDS_REPEAT = True
 
     def __init__(self, clients: Iterable[Tuple[int, str]]):
         clients_bytes = b''
@@ -87,3 +93,13 @@ class ErrorResponse(Response):
 
     def __init__(self):
         super(ErrorResponse, self).__init__(payload=b'')
+
+
+Response.ALL = (
+    RegisterResponse, ListClientsResponse, PublicKeyResponse,
+    PushMessageResponse, PopMessagesResponse, PopMessagesResponse,
+    ErrorResponse,
+)
+
+
+__all__ = [cls.__name__ for cls in Response.ALL]

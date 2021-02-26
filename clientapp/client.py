@@ -2,7 +2,7 @@ import os
 from typing import Tuple
 
 from protocol import exceptions
-from clientapp.clientsideconnection import ClientSideConnection
+from clientapp.clienthandler import ClientHandler
 from protocol.request import Request, RegisterRequest
 
 
@@ -43,31 +43,27 @@ class ClientApp:
 
     def __init__(self):
         self.host, self.port = self._read_server_host_and_port()
-        self.connection = ClientSideConnection(self.host, self.port)
-
-    def __send(self, request: Request):
-        request_bytes = request.create()
-
-        try:
-            self.connection.socket.send(request_bytes)
-        except Exception as e:
-            raise exceptions.ConnectionException(f"connection: {e}")
-        else:
-            print("LISTENING")
-            res = self.connection.socket.recv(1)
-            return res
+        self.handler = ClientHandler(self.host, self.port)
 
     def _register(self) -> str:
         if os.path.exists(ClientApp.ME_FILENAME):
             raise exceptions.ClientAppInvalidRequestError(
                 f"User is already defined in {ClientApp.ME_FILENAME}.")
         name = input("Enter your name: ")
-        public_key = input("Enter your public-key: ").encode().zfill(160)
-        # TODO: validate public key
-        request = RegisterRequest(name=name, public_key=public_key)
-        id = self.__send(request)
+        public_key = input("Enter your public-key: ")
+        public_key_bytes = public_key.encode('ascii')
+        # TODO: validate public key length?
+        request = RegisterRequest(name=name, public_key=public_key_bytes)
+        response = self.handler.handle(request)
+        client_id = response['client_id']
+        with open(ClientApp.ME_FILENAME, 'w+') as file:
+            file.write(
+                f"{name}\n"
+                f"{hex(client_id)}\n"
+                f"{public_key}\n"
+            )
         return f"Successfully registered '{name}' " \
-               f"with public-key {public_key}. Your ID is {id}."
+               f"with public-key {public_key}. Your ID is {client_id}."
 
     def _list_clients(self):
         pass
@@ -160,11 +156,14 @@ class ClientApp:
 
         while True:
             self._clear_screen()
-            print(last_command_output)
+            print(f"*********************************\n"
+                  f"{last_command_output}")
 
             user_input = input(
+                f"*********************************\n"
                 f"MessageU client at your service.\n"
                 f"1) Register\n"
+                f"2) Request for clients list\n"
                 f"3) Request for public key\n"
                 f"4) Request for waiting messages\n"
                 f"5) Send a text message\n"
@@ -182,10 +181,10 @@ class ClientApp:
                 print("Bye!")
                 return
             action = ClientApp.OPTION_CODE_TO_ACTION.get(
-                selected_option, self._wrong_option)
+                selected_option, ClientApp._wrong_option)
             try:
                 last_command_output = action(self)
-            except exceptions.ClientAppInvalidRequestError as e:
-                last_command_output = str(e)
+            # except exceptions.ClientAppInvalidRequestError as e:
+            #     last_command_output = str(e)
             except Exception as e:
-                last_command_output = f"Server responded with an error: {e}"
+                last_command_output = f"Server responded with an error: {e!r}"

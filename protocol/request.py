@@ -28,10 +28,13 @@ class Request(PacketBase, metaclass=abc.ABCMeta):
             payload: The rest of the request payload. Could be empty in case of
               ListRequest.
         """
-        sender_client_id_bytes = \
+        self.sender_client_id_bytes = \
             self.field_to_bytes('client_id', sender_client_id)
-        extended_payload = sender_client_id_bytes + payload
-        super(Request, self).__init__(extended_payload)
+        super(Request, self).__init__(payload)
+
+    def pack(self) -> bytes:
+        """Returns the encoded request in bytes."""
+        return self.sender_client_id_bytes + super(Request, self).pack()
 
 
 class RegisterRequest(Request):
@@ -42,6 +45,8 @@ class RegisterRequest(Request):
     """
 
     CODE = 100
+
+    PAYLOAD_FIELDS = ('name', 'public_key')
 
     def __init__(self, name: str, public_key: bytes):
         """Initializes request with sender's name and public-key, and passes
@@ -66,6 +71,8 @@ class ListClientsRequest(Request):
 
     CODE = 101
 
+    PAYLOAD_FIELDS = ()
+
     def __init__(self, sender_client_id: int):
         """Passes payload to base class.
 
@@ -84,6 +91,8 @@ class PublicKeyRequest(Request):
     """
 
     CODE = 102
+
+    PAYLOAD_FIELDS = ('client_id', )
 
     def __init__(self, sender_client_id: int, requested_client_id: int):
         """Initializes request with requested client ID, and passes payload to
@@ -112,13 +121,14 @@ class PushMessageRequest(Request, metaclass=abc.ABCMeta):
 
     FIELDS_TO_TYPE_AND_LENGTH = dict(Request.FIELDS_TO_TYPE_AND_LENGTH)
     FIELDS_TO_TYPE_AND_LENGTH.update({
-        'message_type': (int, 1),
         'content_size': (int, 4),
     })
 
     @property
     @abc.abstractmethod
     def MESSAGE_TYPE(self) -> int: pass
+
+    PAYLOAD_FIELDS = ('client_id', 'message_type', 'content_size')
 
     def __init__(
             self, sender_client_id: int, receiver_client_id: int,
@@ -139,7 +149,7 @@ class PushMessageRequest(Request, metaclass=abc.ABCMeta):
         message_type_bytes = \
             self.field_to_bytes('message_type', self.MESSAGE_TYPE)
         message_content_size = \
-            self.field_to_bytes('message_content', message_content)
+            self.field_to_bytes('content_size', len(message_content))
         payload = receiver_client_id_bytes + message_type_bytes + \
             message_content_size + message_content
         super(PushMessageRequest, self).__init__(
@@ -175,7 +185,15 @@ class SendSymmetricKeyRequest(PushMessageRequest):
       server.
     """
 
+    FIELDS_TO_TYPE_AND_LENGTH = dict(PushMessageRequest.FIELDS_TO_TYPE_AND_LENGTH)
+    FIELDS_TO_TYPE_AND_LENGTH.update({
+        'encrypted_symmetric_key': (bytes, 16),
+    })
+
     MESSAGE_TYPE = 2
+
+    PAYLOAD_FIELDS = PushMessageRequest.PAYLOAD_FIELDS + \
+                     ('encrypted_symmetric_key', )
 
     def __init__(
             self, sender_client_id: int, receiver_client_id: int,
@@ -204,7 +222,15 @@ class SendMessageRequest(PushMessageRequest):
       server.
     """
 
+    FIELDS_TO_TYPE_AND_LENGTH = dict(
+        PushMessageRequest.FIELDS_TO_TYPE_AND_LENGTH)
+    FIELDS_TO_TYPE_AND_LENGTH.update({
+        'encrypted_message': (bytes, float('inf')),
+    })
+
     MESSAGE_TYPE = 3
+
+    PAYLOAD_FIELDS = PushMessageRequest.PAYLOAD_FIELDS + ('encrypted_message',)
 
     def __init__(
             self, sender_client_id: int, receiver_client_id: int,
@@ -232,7 +258,15 @@ class SendFileRequest(PushMessageRequest):
       server.
     """
 
+    FIELDS_TO_TYPE_AND_LENGTH = dict(
+        PushMessageRequest.FIELDS_TO_TYPE_AND_LENGTH)
+    FIELDS_TO_TYPE_AND_LENGTH.update({
+        'encrypted_file': (bytes, float('inf')),
+    })
+
     MESSAGE_TYPE = 3
+
+    PAYLOAD_FIELDS = PushMessageRequest.PAYLOAD_FIELDS + ('encrypted_file',)
 
     def __init__(
             self, sender_client_id: int, receiver_client_id: int,
@@ -262,6 +296,8 @@ class PopMessagesRequest(Request):
 
     CODE = 104
 
+    PAYLOAD_FIELDS = ()
+
     def __init__(self, sender_client_id: int):
         """Initializes request with sender client ID, and passes payload to
           base class.
@@ -271,3 +307,10 @@ class PopMessagesRequest(Request):
         """
         super(PopMessagesRequest, self).__init__(
             sender_client_id=sender_client_id)
+
+
+Request.ALL = (
+    RegisterRequest, ListClientsRequest, PublicKeyRequest, PushMessageRequest,
+    GetSymmetricKeyRequest, SendSymmetricKeyRequest, SendMessageRequest,
+    SendFileRequest, PopMessagesRequest,
+)
