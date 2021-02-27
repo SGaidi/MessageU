@@ -1,20 +1,27 @@
 import abc
 
+from protocol.fields import StaticIntField
 from protocol.packetbase import PacketBase
 
 
 class Request(PacketBase, metaclass=abc.ABCMeta):
     """Abstract class of a request in MessageU protocol."""
 
-    FIELDS_TO_TYPE_AND_LENGTH = dict(PacketBase.FIELDS_TO_TYPE_AND_LENGTH)
-    FIELDS_TO_TYPE_AND_LENGTH.update({
-        'code': (int, 1),
-    })
-
     VERSION = 2
 
+    CODE_FIELD = StaticIntField(value=CODE, length=1)
+
+    # 'version': (int, 1),
+    # 'payload_size': (int, PAYLOAD_SIZE_LENGTH),
+    # 'name': (str, 255),
+    # 'public_key': (bytes, 160),  # TODO: add encoding validator
+    # 'message_type': (int, 1),
+
     HEADER_FIELDS = (
-        'client_id', 'version', 'code', 'payload_size',
+        PacketBase.CLIENT_ID_FIELD,
+        PacketBase.VERSION_FIELD,
+        CODE_FIELD,
+        PacketBase.PAYLOAD_SIZE_FIELD,
     )
 
     def __init__(self, sender_client_id: int = 0, payload: bytes = b''):
