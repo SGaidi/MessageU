@@ -3,9 +3,9 @@ from varname import nameof
 from collections import OrderedDict
 from typing import Tuple, Any, Type, NewType
 
-from protocol.utils import classproperty
+from protocol.utils import classproperty, abstractproperty
 from protocol.fields import FieldBase, IntField, StaticIntField, StringField, \
-    PublicKeyField
+    UnboundedStringField, PublicKeyField, BytesField, UnboundedBytesField
 
 
 class PacketBase(metaclass=abc.ABCMeta):
@@ -23,26 +23,30 @@ class PacketBase(metaclass=abc.ABCMeta):
 
     # TODO: make one generic PacketBaseValueError instead of too many
 
+    @abstractproperty
+    def VERSION(self) -> int: pass
+    @abstractproperty
+    def CODE(self) -> int: pass
     @property
-    @abc.abstractmethod
-    def VERSION(self) -> int:
-        pass
-    @property
-    @abc.abstractmethod
-    def CODE(self) -> int:
-        pass
+    def MESSAGE_TYPE(self) -> int: pass
 
     CLIENT_ID_FIELD = IntField(length=16)
     VERSION_FIELD = StaticIntField(value=VERSION, length=1)
+    @abstractproperty
+    def CODE_FIELD(self) -> FieldBase: pass
     PAYLOAD_SIZE_FIELD = IntField(length=4)
     NAME_FIELD = StringField(length=255)
     PUBLIC_KEY_FIELD = PublicKeyField(length=160)
-    MESSAGE_TYPE_FIELD = IntField(length=1)
+    MESSAGE_TYPE_FIELD = StaticIntField(value=MESSAGE_TYPE, length=1)
+    CONTENT_SIZE_FIELD = IntField(length=4)
+    MESSAGE_CONTENT_FIELD = UnboundedStringField()
+    ENCRYPTED_SYMMETRIC_KEY_FIELD = BytesField(length=16)
+    ENCRYPTED_MESSAGE_FIELD = UnboundedBytesField()
+    ENCRYPTED_FILE_FIELD = UnboundedBytesField()
 
     FIELD_SUFFIX_LENGTH = len('_FIELD')
 
-    @property
-    @abc.abstractmethod
+    @abstractproperty
     def HEADER_FIELDS(self) -> Tuple[FieldBase]: pass
     @classproperty
     def HEADER_LENGTH(self) -> int:
@@ -54,8 +58,7 @@ class PacketBase(metaclass=abc.ABCMeta):
             for field in self.HEADER_FIELDS
         )
 
-    @property
-    @abc.abstractmethod
+    @abstractproperty
     def PAYLOAD_FIELDS(self) -> Tuple[FieldBase]: pass
     @classproperty
     def PAYLOAD_FIELDS_KWARGS(self) -> OrderedDict[str, FieldBase]:

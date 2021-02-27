@@ -102,14 +102,27 @@ class StringField(FieldBase):
         return field_bytes.decode().lstrip('0')
 
 
+class UnboundedStringField(StringField):
+    
+    def __init__(self):
+        super(UnboundedStringField, self).__init__(length=float('inf'))
+
+    def pack(self, field: str) -> bytes:
+        self._validate_field_to_pack(field)
+        return field.encode()
+
+    def unpack(self, bytes_iter: Iterator[bytes]) -> str:
+        return bytes(bytes_iter).decode()
+
+
 class BytesField(FieldBase, metaclass=abc.ABCMeta):
 
     TYPE = bytes
 
-    # def pack(self, field: bytes) -> bytes:
-    #     self._validate_field_to_pack(field)
-    #     return field
-    #
+    def pack(self, field: bytes) -> bytes:
+        self._validate_field_to_pack(field)
+        return field
+
     # def unpack(self, bytes_iter: Iterator[bytes]) -> bytes:
     #     return bytes(self._slice_bytes_iter(bytes_iter))
 
@@ -123,9 +136,14 @@ class PublicKeyField(BytesField):
         except Exception as e:
             raise ValueError(f"Invalid encoding: {e!r}")
 
-    def pack(self, field: bytes) -> bytes:
-        self._validate_field_to_pack(field)
-        return field
-
     def unpack(self, bytes_iter: Iterator[bytes]) -> bytes:
         return bytes(self._slice_bytes_iter(bytes_iter))
+
+
+class UnboundedBytesField(BytesField):
+
+    def __init__(self):
+        super(UnboundedBytesField, self).__init__(length=float('inf'))
+
+    def unpack(self, bytes_iter: Iterator[bytes]) -> str:
+        return bytes(bytes_iter)

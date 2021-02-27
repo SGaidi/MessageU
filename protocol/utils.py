@@ -1,3 +1,4 @@
+import abc
 
 
 class classproperty(object):
@@ -5,3 +6,7 @@ class classproperty(object):
         self.f = f
     def __get__(self, obj, owner):
         return self.f(owner)
+
+
+def abstractproperty(func):
+    return property(abc.abstractmethod(func))
