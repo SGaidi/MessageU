@@ -1,6 +1,6 @@
 import abc
 from itertools import islice
-from typing import Type, Iterator
+from typing import Type, Iterator, Optional
 
 
 class FieldBase(metaclass=abc.ABCMeta):
@@ -9,15 +9,19 @@ class FieldBase(metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def TYPE(self) -> Type: pass
 
-    def __init__(self, length: int):
+    def __init__(self, name: str, length: int):
+        self.name = name
         self.length = length
 
     def _validate_type(self, field: TYPE) -> None:
+        if isinstance(field, property):
+            return  # assumes properties are valid
         if not isinstance(field, self.TYPE):
             raise ValueError(f"Invalid type {type(field)!r}, "
                              f"expected {self.TYPE!r}.")
 
     def _validate_length(self, field: str) -> None:
+        print(self)
         if len(field) > self.length:
             raise ValueError(
                 f"{field!r} exceeds the {self.length!r} "
@@ -74,8 +78,8 @@ class IntField(FieldBase):
 
 class StaticIntField(IntField):
 
-    def __init__(self, value: int, length: int):
-        super(StaticIntField, self).__init__(length=length)
+    def __init__(self, value: int, name: str, length: int):
+        super(StaticIntField, self).__init__(name=name, length=length)
         self.value = value
 
     def pack(self) -> bytes:
@@ -104,8 +108,9 @@ class StringField(FieldBase):
 
 class UnboundedStringField(StringField):
     
-    def __init__(self):
-        super(UnboundedStringField, self).__init__(length=float('inf'))
+    def __init__(self, name: str):
+        super(UnboundedStringField, self).__init__(
+            name=name, length=float('inf'))
 
     def pack(self, field: str) -> bytes:
         self._validate_field_to_pack(field)
@@ -115,7 +120,7 @@ class UnboundedStringField(StringField):
         return bytes(bytes_iter).decode()
 
 
-class BytesField(FieldBase, metaclass=abc.ABCMeta):
+class BytesField(FieldBase):
 
     TYPE = bytes
 
@@ -123,8 +128,8 @@ class BytesField(FieldBase, metaclass=abc.ABCMeta):
         self._validate_field_to_pack(field)
         return field
 
-    # def unpack(self, bytes_iter: Iterator[bytes]) -> bytes:
-    #     return bytes(self._slice_bytes_iter(bytes_iter))
+    def unpack(self, bytes_iter: Iterator[bytes]) -> bytes:
+        return bytes(self._slice_bytes_iter(bytes_iter))
 
 
 class PublicKeyField(BytesField):
@@ -142,8 +147,9 @@ class PublicKeyField(BytesField):
 
 class UnboundedBytesField(BytesField):
 
-    def __init__(self):
-        super(UnboundedBytesField, self).__init__(length=float('inf'))
+    def __init__(self, name: str):
+        super(UnboundedBytesField, self).__init__(
+            name=name, length=float('inf'))
 
     def unpack(self, bytes_iter: Iterator[bytes]) -> str:
         return bytes(bytes_iter)

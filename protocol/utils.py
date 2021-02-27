@@ -1,4 +1,5 @@
 import abc
+import re
 
 
 class classproperty(object):
@@ -10,3 +11,8 @@ class classproperty(object):
 
 def abstractproperty(func):
     return property(abc.abstractmethod(func))
+
+
+def camel_case_to_snake_case(text: str) -> str:
+    import re
+    return re.sub(r'(?<!^)(?=[A-Z])', '_', text).lower()

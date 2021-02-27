@@ -10,14 +10,13 @@ class Request(PacketBase, metaclass=abc.ABCMeta):
 
     VERSION = 2
 
-    CODE_FIELD = StaticIntField(value=CODE, length=1)
+    CODE_FIELD = StaticIntField(name='code', value=PacketBase.CODE, length=1)
 
     HEADER_FIELDS = (
-        PacketBase.CLIENT_ID_FIELD,
+        PacketBase.SENDER_CLIENT_ID_FIELD,
         PacketBase.VERSION_FIELD,
         CODE_FIELD,
         PacketBase.PAYLOAD_SIZE_FIELD,
-        PacketBase.MESSAGE_TYPE_FIELD,
     )
 
 
@@ -55,7 +54,7 @@ class PublicKeyRequest(Request):
 
     CODE = 102
 
-    PAYLOAD_FIELDS = (PacketBase.CLIENT_ID_FIELD, )
+    PAYLOAD_FIELDS = (PacketBase.RECEIVER_CLIENT_ID_FIELD, )
 
 
 class PushMessageRequest(Request, metaclass=abc.ABCMeta):
@@ -71,7 +70,7 @@ class PushMessageRequest(Request, metaclass=abc.ABCMeta):
     def MESSAGE_TYPE(self) -> int: pass
 
     PAYLOAD_FIELDS = (
-        PacketBase.CLIENT_ID_FIELD,
+        PacketBase.RECEIVER_CLIENT_ID_FIELD,
         PacketBase.MESSAGE_TYPE_FIELD,
         PacketBase.CONTENT_SIZE_FIELD,
         PacketBase.MESSAGE_CONTENT_FIELD,

@@ -2,20 +2,20 @@ import abc
 from typing import Tuple, Iterable
 
 from protocol.packetbase import PacketBase
+from protocol.fields import StaticIntField
 
 
 class Response(PacketBase, metaclass=abc.ABCMeta):
 
-    FIELDS_TO_TYPE_AND_LENGTH = dict(PacketBase.FIELDS_TO_TYPE_AND_LENGTH)
-    FIELDS_TO_TYPE_AND_LENGTH.update({
-        'code': (int, 2),
-        'message_id': (int, 4),
-    })
-
     VERSION = 2
 
+    CODE_FIELD = StaticIntField(name='code', value=PacketBase.CODE, length=2)
+
     HEADER_FIELDS = (
-        'version', 'code', 'payload_size',
+        PacketBase.VERSION_FIELD,
+        CODE_FIELD,
+        PacketBase.PAYLOAD_SIZE_FIELD,
+        PacketBase.MESSAGE_ID_FIELD,
     )
 
 
@@ -23,19 +23,18 @@ class RegisterResponse(Response):
 
     CODE = 1000
 
-    PAYLOAD_FIELDS = ('client_id', )
-
-    def __init__(self, new_client_id: int):
-        new_client_id_bytes = self.field_to_bytes('client_id', new_client_id)
-        super(RegisterResponse, self).__init__(
-            payload=new_client_id_bytes)
+    PAYLOAD_FIELDS = (Response.SENDER_CLIENT_ID_FIELD, )
 
 
 class ListClientsResponse(Response):
 
     CODE = 1001
 
-    PAYLOAD_FIELDS = ('client_id', 'name', )
+    # TODO: compound field type
+    PAYLOAD_FIELDS = (
+        Response.SENDER_CLIENT_ID_FIELD,
+        Response.NAME_FIELD,
+    )
 
     PAYLOAD_FIELDS_REPEAT = True
 

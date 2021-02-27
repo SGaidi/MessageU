@@ -1,8 +1,9 @@
 import abc
-import logging
-from typing import Type, Tuple, Dict, Any
+from typing import Type, Tuple, Dict, Any, Union
 
 from protocol.packetbase import PacketBase
+from protocol.request import Request
+from protocol.response import Response
 
 
 class HandlerBase(metaclass=abc.ABCMeta):
@@ -11,16 +12,28 @@ class HandlerBase(metaclass=abc.ABCMeta):
     def _recv(self, buffer_size: int) -> bytes: pass
 
     def _expect_packet(
-            self, packet_type: Type[PacketBase],
+            self, packet_type: Type[Union[Request, Response]],
     ) -> Tuple[Type[PacketBase], Dict[str, Any], Dict[str, Any]]:
-        packet_header_bytes = \
-            self._recv(packet_type.HEADER_LENGTH)
-        header_fields = packet_type.unpack_packet_base(packet_header_bytes)
 
-        packet_payload_bytes = self._recv(header_fields['payload_size'])
-        concrete_packet_type = \
-            packet_type.get_concrete_packet_type(header_fields['code'])
-        payload_fields = \
-            concrete_packet_type.unpack_packet_payload(packet_payload_bytes)
+        # print
+        # "From:", self.client_address
+        buffer = []
 
-        return concrete_packet_type, header_fields, payload_fields
+        while True:
+            data = self._recv(1024)
+            if not data: break
+            buffer.append(data)
+        self.request.close()
+
+        data = b''.join(buffer)
+        header_fields = packet_type.unpack_header(data)
+        code = header_fields['Code']
+        packet_concrete_type = packet_type.get_concrete_packet_type(code)
+        header_offset = packet_concrete_type.HEADER_LENGTH
+        payload = data[header_offset:]
+        payload_fields = packet_concrete_type.unpack_payload(payload)
+
+        return packet_concrete_type, header_fields, payload_fields
+
+        # TODO: here handle buffered data
+

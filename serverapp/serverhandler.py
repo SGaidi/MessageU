@@ -7,6 +7,7 @@ from django.core.exceptions import ValidationError
 
 from protocol import exceptions
 from protocol.handlerbase import HandlerBase
+from protocol.utils import camel_case_to_snake_case
 from serverapp.models import Client, Message
 from protocol.request import Request
 from protocol.response import *
@@ -52,16 +53,14 @@ class ServerHandler(HandlerBase, socketserver.BaseRequestHandler):
         Message.objects.all().delete()
         return messages
 
-    def camel_case_to_snake_case(self, text: str) -> str:
-        return re.sub(r'(?<!^)(?=[A-Z])', '_', text).lower()
+    def handle(self) -> None:
+        # TODO: wrap with try and log errors
+        request_type, header_fields, payload_fields = self._expect_request()
 
-    def handle(self):
-        request, header_fields, payload_fields = self._expect_request()
-        request_name = request.__name__[:-7]  # omit 'Request'
-        logging.debug(request_name)
-        method_name = '_' + self.camel_case_to_snake_case(request_name)
+        request_name = request_type.__name__[:-7]  # omit 'Request'
+        method_name = '_' + camel_case_to_snake_case(request_name)
         response_kwargs = getattr(self, method_name)(payload_fields)
         logging.info(f'result: {response_kwargs}')
         response_name = request_name + 'Response'
-        response_bytes = globals()[response_name](**response_kwargs).pack()
+        response_bytes = globals()[response_name]().pack(**response_kwargs)
         self.request.send(response_bytes)

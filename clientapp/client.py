@@ -33,7 +33,7 @@ class ClientApp:
         except ValueError as e:
             raise exceptions.ServerAppConfigurationError(
                 f"Invalid port format: {content}. Should be an integer.")
-        # TODO: validate host and port format
+        # TODO: validate host and port format?
         # if not (ServerApp.MIN_PORT <= port <= ServerApp.MAX_PORT):
         #     raise exceptions.ServerAppConfigurationError(
         #         f"Invalid port ({port}), "
@@ -43,7 +43,7 @@ class ClientApp:
 
     def __init__(self):
         self.host, self.port = self._read_server_host_and_port()
-        self.handler = ClientHandler(self.host, self.port)
+        self.handler = ClientHandler()
 
     def _register(self) -> str:
         if os.path.exists(ClientApp.ME_FILENAME):
@@ -52,10 +52,10 @@ class ClientApp:
         name = input("Enter your name: ")
         public_key = input("Enter your public-key: ")
         public_key_bytes = public_key.encode('ascii')
-        # TODO: validate public key length?
-        request = RegisterRequest(name=name, public_key=public_key_bytes)
-        response = self.handler.handle(request)
-        client_id = response['client_id']
+        request = RegisterRequest()
+        fields = {'sender_client_id': 0, 'name': name, 'public_key': public_key_bytes}
+        response_fields = self.handler.handle(request, fields)
+        client_id = response_fields['client_id']
         with open(ClientApp.ME_FILENAME, 'w+') as file:
             file.write(
                 f"{name}\n"
@@ -155,7 +155,7 @@ class ClientApp:
         last_command_output = ''
 
         while True:
-            self._clear_screen()
+            # self._clear_screen()
             print(f"*********************************\n"
                   f"{last_command_output}")
 
@@ -184,7 +184,5 @@ class ClientApp:
                 selected_option, ClientApp._wrong_option)
             try:
                 last_command_output = action(self)
-            # except exceptions.ClientAppInvalidRequestError as e:
-            #     last_command_output = str(e)
             except Exception as e:
                 last_command_output = f"Server responded with an error: {e!r}"

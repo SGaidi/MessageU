@@ -1,7 +1,8 @@
 import abc
+import logging
 from varname import nameof
 from collections import OrderedDict
-from typing import Tuple, Any, Type, NewType
+from typing import Tuple, Any, Type, NewType, Iterable
 
 from protocol.utils import classproperty, abstractproperty
 from protocol.fields import FieldBase, IntField, StaticIntField, StringField, \
@@ -30,59 +31,57 @@ class PacketBase(metaclass=abc.ABCMeta):
     @property
     def MESSAGE_TYPE(self) -> int: pass
 
-    CLIENT_ID_FIELD = IntField(length=16)
-    VERSION_FIELD = StaticIntField(value=VERSION, length=1)
+    # TODO: remove the assignments and move it directly to HEADER/PAYLOAD FIELDS
+    #  this so names like VERSION would be loaded in child classes.
+    SENDER_CLIENT_ID_FIELD = IntField(name='sender_client_id', length=16)
+    RECEIVER_CLIENT_ID_FIELD = IntField(name='receiver_client_id', length=16)
+    VERSION_FIELD = StaticIntField(name='version', value=VERSION, length=1)
     @abstractproperty
     def CODE_FIELD(self) -> FieldBase: pass
-    PAYLOAD_SIZE_FIELD = IntField(length=4)
-    NAME_FIELD = StringField(length=255)
-    PUBLIC_KEY_FIELD = PublicKeyField(length=160)
-    MESSAGE_TYPE_FIELD = StaticIntField(value=MESSAGE_TYPE, length=1)
-    CONTENT_SIZE_FIELD = IntField(length=4)
-    MESSAGE_CONTENT_FIELD = UnboundedStringField()
-    ENCRYPTED_SYMMETRIC_KEY_FIELD = BytesField(length=16)
-    ENCRYPTED_MESSAGE_FIELD = UnboundedBytesField()
-    ENCRYPTED_FILE_FIELD = UnboundedBytesField()
+    PAYLOAD_SIZE_FIELD = IntField(name='payload_size', length=4)
+    NAME_FIELD = StringField(name='client_name', length=255)
+    PUBLIC_KEY_FIELD = PublicKeyField(name='public_key', length=160)
+    MESSAGE_TYPE_FIELD = StaticIntField(
+        name='message_type', value=MESSAGE_TYPE, length=1)
+    CONTENT_SIZE_FIELD = IntField(name='content_size', length=4)
+    MESSAGE_CONTENT_FIELD = UnboundedStringField(name='message_content')
+    ENCRYPTED_SYMMETRIC_KEY_FIELD = BytesField(
+        name='ecrypted_symmetric_key', length=16)
+    ENCRYPTED_MESSAGE_FIELD = UnboundedBytesField(name='encrypted_message')
+    ENCRYPTED_FILE_FIELD = UnboundedBytesField(name='encrypted_file')
+    MESSAGE_ID_FIELD = IntField(name='message_id', length=5)
 
-    FIELD_SUFFIX_LENGTH = len('_FIELD')
+    FIELD_SUFFIX_LENGTH = len('FIELD')
 
     @abstractproperty
     def HEADER_FIELDS(self) -> Tuple[FieldBase]: pass
     @classproperty
     def HEADER_LENGTH(self) -> int:
         return sum(field.length for field in self.HEADER_FIELDS)
-    @classproperty
-    def HEADER_FIELDS_KWARGS(self) -> OrderedDict[str, FieldBase]:
-        return OrderedDict(
-            (nameof(field)[:-self.FIELD_SUFFIX_LENGTH], field)
-            for field in self.HEADER_FIELDS
-        )
 
     @abstractproperty
     def PAYLOAD_FIELDS(self) -> Tuple[FieldBase]: pass
-    @classproperty
-    def PAYLOAD_FIELDS_KWARGS(self) -> OrderedDict[str, FieldBase]:
-        return OrderedDict(
-            (nameof(field)[:-self.FIELD_SUFFIX_LENGTH], field)
-            for field in self.PAYLOAD_FIELDS
-        )
 
     def __str__(self):
         """Returns string with basic attributes. Used for debug logging."""
         return f"{self.__class__.__name__}" \
                f"(code={self.CODE}, " \
-               f"header={self.HEADER_FIELDS_KWARGS}, " \
-               f"payload={self.PAYLOAD_FIELDS_KWARGS})"
+               f"header={self.HEADER_FIELDS}, " \
+               f"payload={self.PAYLOAD_FIELDS})"
 
     def pack(self, **kwargs: OrderedDict[str, Any]) -> bytes:
         fields_bytes = []
-        all_fields = self.HEADER_FIELDS_KWARGS + self.PAYLOAD_FIELDS_KWARGS
-        for name, field in all_fields.items():
+        all_fields = self.HEADER_FIELDS + self.PAYLOAD_FIELDS
+        for field in all_fields:
+            name = field.name
+            print(f"{name}:{field}")
             try:
                 field_value = kwargs.pop(name)
             except KeyError:
-                raise ValueError(f"Missing field {name}")
-            field_bytes = field.pack(field_value)
+                # raise ValueError(f"Missing field {name}.")
+                fields_bytes = field.pack()
+            else:
+                field_bytes = field.pack(field_value)
             fields_bytes.append(field_bytes)
         return b''.join(fields_bytes)
 
@@ -90,6 +89,15 @@ class PacketBase(metaclass=abc.ABCMeta):
         if len(packet) < self.HEADER_LENGTH:
             raise ValueError(f"Packet length {len(packet)} is higher then "
                              f"expected header length {self.HEADER_LENGTH}.")
+
+    def _unpack_fields(
+            self, packet_iter: Iterable[bytes],
+            fields: OrderedDict[str, FieldBase],
+            expected_fields: OrderedDict[str, FieldBase],
+    ) -> None:
+        for field in expected_fields:
+            field_value = field.unpack(packet_iter)
+            fields[field.name] = field_value
 
     def _validate_payload_length(
             self, packet: bytes, expected_payload_length: int,
@@ -99,18 +107,13 @@ class PacketBase(metaclass=abc.ABCMeta):
             raise ValueError(f"Packet length is {len(packet)}, expected "
                              f"{expected_packet_length}.")
 
-    def unpack(self, packet: bytes) -> OrderedDict[str, Any]:
+    def unpack_header(self, packet: bytes) -> OrderedDict[str, Any]:
         self._validate_header_length()
         fields = OrderedDict()
         packet_iter = iter(packet)
-        for name, field in self.HEADER_FIELDS_KWARGS.items():
-            field_value = field.unpack(packet_iter)
-            fields[name] = field_value
+        self._unpack_fields(packet_iter, fields, self.HEADER_FIELDS)
         expected_payload_length = fields['payload_size']
         self._validate_payload_length(packet, expected_payload_length)
-        for name, field in self.PAYLOAD_FIELDS_KWARGS.items():
-            field_value = field.unpack(packet_iter)
-            fields[name] = field_value
         return fields
 
     @classmethod
@@ -119,3 +122,11 @@ class PacketBase(metaclass=abc.ABCMeta):
             if code == packet.CODE:
                 return packet
         raise ValueError(f"Unexpected code {code}!")
+
+    def unpack_payload(self, packet: bytes) -> OrderedDict[str, Any]:
+        if self.__class__.__name__ == 'PacketBase':
+            raise NotImplementedError(f'Should be called from child class.')
+        fields = OrderedDict()
+        packet_iter = iter(packet)
+        self._unpack_fields(packet_iter, fields, self.PAYLOAD_FIELDS)
+        return fields
