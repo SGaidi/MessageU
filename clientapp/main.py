@@ -1,8 +1,8 @@
 import os
 from typing import Tuple
 
-from protocol import exceptions
-from clientapp.clienthandler import ClientHandler
+from common import exceptions
+from clientapp.handler import ClientHandler
 from protocol.packets.request import RegisterRequest
 
 
@@ -42,8 +42,8 @@ class ClientApp:
         return host, port
 
     def __init__(self):
-        self.host, self.port = self._read_server_host_and_port()
-        self.handler = ClientHandler()
+        host, port = self._read_server_host_and_port()
+        self.handler = ClientHandler(host, port)
         # TODO: load user info if exists
 
     def _register(self) -> str:
@@ -55,7 +55,7 @@ class ClientApp:
         public_key = input("Enter your public-key: ")
         public_key_bytes = public_key.encode('ascii')
         request = RegisterRequest()
-        fields = {'sender_client_id': 0, 'name': name, 'public_key': public_key_bytes}
+        fields = {'sender_client_id': 0, 'client_name': name, 'public_key': public_key_bytes}
         response_fields = self.handler.handle(request, fields)
         client_id = response_fields['client_id']
         with open(ClientApp.ME_FILENAME, 'w+') as file:
@@ -184,10 +184,11 @@ class ClientApp:
                 return
             action = ClientApp.OPTION_CODE_TO_ACTION.get(
                 selected_option, ClientApp._wrong_option)
-            try:
-                last_command_output = action(self)
-            except Exception as e:
-                last_command_output = f"Server responded with an error: {e!r}"
+            last_command_output = action(self)
+            # try:
+            #     last_command_output = action(self)
+            # except Exception as e:
+            #     last_command_output = f"Server responded with an error: {e!r}"
 
 
 def run():

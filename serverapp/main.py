@@ -16,9 +16,8 @@ sys.path.append(pathlib.Path(__file__).resolve().parent)
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'serverdb.settings')
 django.setup()
 
-
-from protocol import exceptions
-from serverapp.serverhandler import ServerHandler
+from common import exceptions
+from serverapp.handler import ServerHandler
 
 
 class ServerApp:

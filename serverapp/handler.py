@@ -1,23 +1,21 @@
 import logging
 import socketserver
 from typing import Dict, Any
+from itertools import dropwhile
 
 from django.core.exceptions import ValidationError
 
-from protocol import exceptions
-from protocol.handlerbase import HandlerBase
-from protocol.utils import camel_case_to_snake_case
+from common import exceptions
+from common.handlerbase import HandlerBase
+from common.utils import camel_case_to_snake_case
 from serverapp.models import Client, Message
-from protocol.packets.request import Request
+from protocol.packets.response import Response
 
 
 class ServerHandler(HandlerBase, socketserver.BaseRequestHandler):
 
     def _recv(self, buffer_size: int) -> bytes:
         return self.request.recv(buffer_size)
-
-    def _expect_request(self):
-        return self._expect_packet(Request)
 
     """ Actions """
 
@@ -27,11 +25,11 @@ class ServerHandler(HandlerBase, socketserver.BaseRequestHandler):
             raise exceptions.ClientValidationError()
         try:
             client = Client.objects.create(
-                name=payload_fields['name'],
+                name=payload_fields['client_name'],
                 public_key=payload_fields['public_key'],
             )
-        except ValidationError as e:
-            raise exceptions.ClientValidationError()
+        except Exception as e:
+            raise exceptions.ClientValidationError("User already exists!")
         else:
             return {'new_client_id': client.id}
 
@@ -53,11 +51,21 @@ class ServerHandler(HandlerBase, socketserver.BaseRequestHandler):
 
     def handle(self) -> None:
         # TODO: wrap with try and log errors
-        request_type, header_fields, payload_fields = self._expect_request()
-        request_name = request_type.__name__[:-7]  # omit 'Request'
-        method_name = '_' + camel_case_to_snake_case(request_name)
-        response_kwargs = getattr(self, method_name)(payload_fields)
-        logging.info(f'result: {response_kwargs}')
-        response_name = request_name + 'Response'
-        response_bytes = globals()[response_name]().pack(**response_kwargs)
-        self.request.send(response_bytes)
+        try:
+            request_type, header_fields, payload_fields = \
+                self._expect_packet(self.request)
+            request_name = request_type.__class__.__name__[:-7]  # omit 'Request'
+            method_name = '_' + camel_case_to_snake_case(request_name)
+            response_kwargs = getattr(self, method_name)(payload_fields)
+            logging.info(f'result: {response_kwargs}')
+            response_name = request_name + 'Response'
+
+            response_type = next(dropwhile(
+                lambda response_t: response_t.__name__ != response_name,
+                Response.ALL,
+            ))
+
+            response_bytes = response_type().pack(**response_kwargs)
+            self.request.send(response_bytes)
+        except Exception as e:
+            logging.exception(e)

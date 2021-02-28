@@ -1,16 +1,14 @@
 import abc
 from typing import Optional
 
-from protocol.utils import abstractproperty
+from common.utils import abstractproperty
 from protocol.packets.base import PacketBase
 from protocol.fields.base import Bytes
 
-from protocol.fields.header import Version, Code, PayloadSize, \
-    SenderClientID
+from protocol.fields.header import PayloadSize, SenderClientID
 from protocol.fields.payload import ClientName, PublicKey
-from protocol.fields.message import StaticMessageType, \
-    ReceiverClientID, StaticMessageContentSize, \
-    EncryptedSymmetricKey, EncryptedMessageContent, \
+from protocol.fields.message import StaticMessageType, ReceiverClientID, \
+    StaticMessageContentSize, EncryptedSymmetricKey, EncryptedMessageContent, \
     EncryptedFileContent
 
 
@@ -20,10 +18,9 @@ class Request(PacketBase, metaclass=abc.ABCMeta):
     VERSION = 2
 
     def __init__(self):
-        self.payload_size = self.length_of_fields(self.payload_fields)
-        self.header_fields = (
-            Version(self.VERSION),
-            Code(self.CODE),
+        super(Request, self).__init__()
+        self.payload_size = self._length_of_fields(self.payload_fields)
+        self.header_fields += (
             PayloadSize(self.payload_size),
             SenderClientID(),
         )

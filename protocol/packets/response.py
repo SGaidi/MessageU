@@ -2,7 +2,7 @@ import abc
 
 from protocol.packets.base import PacketBase
 
-from protocol.fields.header import Version, Code, \
+from protocol.fields.header import StaticVersion, StaticCode, \
     PayloadSize
 from protocol.fields.payload import NoClientID, Clients, \
     RequestedClientID, PublicKey
@@ -15,12 +15,9 @@ class Response(PacketBase, metaclass=abc.ABCMeta):
     VERSION = 2
 
     def __init__(self):
-        self.payload_size = self.length_of_fields(self.payload_fields)
-        self.header_fields = (
-            Version(self.VERSION),
-            Code(self.CODE),
-            PayloadSize(self.payload_size),
-        )
+        super(Response, self).__init__()
+        self.payload_size = self._length_of_fields(self.payload_fields)
+        self.header_fields += (PayloadSize(self.payload_size), )
 
 
 class RegisterResponse(Response):

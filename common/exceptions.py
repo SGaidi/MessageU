@@ -32,12 +32,13 @@ class ClientAppInvalidRequestError(ValueError):
     pass
 
 
-class RequestException(Exception):
-    """Raised when an exception with request occurred."""
-    pass
+class PacketBaseValueError(ValueError):
+    """Raised when validation of packet base failes."""
+
+    def __init__(self, packet, message: str):
+        super(PacketBaseValueError, self).__init__(f"{packet!s:}: {message}")
 
 
 class ConnectionException(Exception):
     """Raised when an exception with connection occurred."""
     pass
-

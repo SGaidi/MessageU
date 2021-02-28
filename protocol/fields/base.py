@@ -2,7 +2,7 @@ import abc
 from itertools import islice, cycle
 from typing import Type, Iterator, Tuple, Sequence, Any
 
-from protocol.utils import abstractproperty
+from common.utils import abstractproperty
 
 
 class Base(metaclass=abc.ABCMeta):
@@ -13,6 +13,9 @@ class Base(metaclass=abc.ABCMeta):
     def __init__(self, name: str, length: int):
         self.name = name
         self.length = length
+
+    def __str__(self):
+        return f'{self.name}({self.length})'
 
     def _validate_type(self, field_value: TYPE) -> None:
         if not isinstance(field_value, self.TYPE):

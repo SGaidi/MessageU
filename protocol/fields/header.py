@@ -1,20 +1,39 @@
-from protocol.fields.base import StaticInt, ClientID
+from protocol.fields.base import Int, StaticInt, ClientID
 
 
-class Version(StaticInt):
+# TODO: after logic si done, convert some classes to typing?
+
+
+class Version(Int):
+
+    def __init__(self):
+        super(Version, self).__init__(name='version', length=1)
+
+
+class StaticVersion(StaticInt):
 
     def __init__(self, version: int):
-        super(Version, self).__init__(
+        super(StaticVersion, self).__init__(
             name='version', value=version, length=1,
         )
 
 
-class Code(StaticInt):
+class RequestCode(Int):
+
+    def __init__(self):
+        super(RequestCode, self).__init__(name='code', length=1)
+
+
+class ResponseCode(Int):
+
+    def __init__(self):
+        super(RequestCode, self).__init__(name='code', length=2)
+
+
+class StaticCode(StaticInt):
 
     def __init__(self, code: int):
-        super(Code, self).__init__(
-            name='code', value=code, length=1,
-        )
+        super(StaticCode, self).__init__(name='code', value=code, length=1)
 
 
 class PayloadSize(StaticInt):
