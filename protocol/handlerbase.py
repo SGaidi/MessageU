@@ -1,7 +1,7 @@
 import abc
 from typing import Type, Tuple, Dict, Any, Union
 
-from protocol.packets.packetbase import PacketBase
+from protocol.packets.base import PacketBase
 from protocol.packets.request import Request
 from protocol.packets.response import Response
 

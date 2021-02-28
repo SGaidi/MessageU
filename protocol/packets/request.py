@@ -2,16 +2,16 @@ import abc
 from typing import Optional
 
 from protocol.utils import abstractproperty
-from protocol.packets.packetbase import PacketBase
-from protocol.fields.fieldbase import BytesField
+from protocol.packets.base import PacketBase
+from protocol.fields.base import Bytes
 
-from protocol.fields.headerfields import VersionField, CodeField, \
-    PayloadSizeField, SenderClientIDField
-from protocol.fields.payloadfields import ClientNameField, PublicKeyField
-from protocol.fields.messagefields import StaticMessageTypeField, \
-    ReceiverClientIDField, StaticMessageContentSizeField, \
-    EncryptedSymmetricKeyField, EncryptedMessageContentField, \
-    EncryptedFileContentField
+from protocol.fields.header import Version, Code, PayloadSize, \
+    SenderClientID
+from protocol.fields.payload import ClientName, PublicKey
+from protocol.fields.message import StaticMessageType, \
+    ReceiverClientID, StaticMessageContentSize, \
+    EncryptedSymmetricKey, EncryptedMessageContent, \
+    EncryptedFileContent
 
 
 class Request(PacketBase, metaclass=abc.ABCMeta):
@@ -22,10 +22,10 @@ class Request(PacketBase, metaclass=abc.ABCMeta):
     def __init__(self):
         self.payload_size = self.length_of_fields(self.payload_fields)
         self.header_fields = (
-            VersionField(self.VERSION),
-            CodeField(self.CODE),
-            PayloadSizeField(self.payload_size),
-            SenderClientIDField(),
+            Version(self.VERSION),
+            Code(self.CODE),
+            PayloadSize(self.payload_size),
+            SenderClientID(),
         )
 
 
@@ -38,8 +38,8 @@ class RegisterRequest(Request):
     CODE = 100
 
     payload_fields = (
-        ClientNameField(),
-        PublicKeyField(),
+        ClientName(),
+        PublicKey(),
     )
 
 
@@ -63,7 +63,7 @@ class PublicKeyRequest(Request):
 
     CODE = 102
 
-    payload_fields = (ClientNameField(), )
+    payload_fields = (ClientName(), )
 
 
 class PushMessageRequest(Request, metaclass=abc.ABCMeta):
@@ -80,14 +80,14 @@ class PushMessageRequest(Request, metaclass=abc.ABCMeta):
         pass
 
     # TODO: make MessageContentBaseField
-    MESSAGE_CONTENT_FIELD: Optional[BytesField]
+    MESSAGE_CONTENT_FIELD: Optional[Bytes]
 
     def __int__(self):
         self.content_size = self.MESSAGE_CONTENT_FIELD.length
         self.payload_fields = (
-            ReceiverClientIDField(),
-            StaticMessageTypeField(self.MESSAGE_TYPE),
-            StaticMessageContentSizeField(self.content_size),
+            ReceiverClientID(),
+            StaticMessageType(self.MESSAGE_TYPE),
+            StaticMessageContentSize(self.content_size),
         )
         if self.MESSAGE_CONTENT_FIELD is not None:
             self.payload_fields += (self.MESSAGE_CONTENT_FIELD, )
@@ -112,7 +112,7 @@ class SendSymmetricKeyRequest(PushMessageRequest):
     """
 
     MESSAGE_TYPE = 2
-    MESSAGE_CONTENT_FIELD = EncryptedSymmetricKeyField()
+    MESSAGE_CONTENT_FIELD = EncryptedSymmetricKey()
 
 
 class SendMessageRequest(PushMessageRequest):
@@ -123,7 +123,7 @@ class SendMessageRequest(PushMessageRequest):
     """
 
     MESSAGE_TYPE = 3
-    MESSAGE_CONTENT_FIELD = EncryptedMessageContentField()
+    MESSAGE_CONTENT_FIELD = EncryptedMessageContent()
 
 
 class SendFileRequest(PushMessageRequest):
@@ -133,7 +133,7 @@ class SendFileRequest(PushMessageRequest):
     """
 
     MESSAGE_TYPE = 3
-    MESSAGE_CONTENT_FIELD = EncryptedFileContentField()
+    MESSAGE_CONTENT_FIELD = EncryptedFileContent()
 
 
 class PopMessagesRequest(Request):

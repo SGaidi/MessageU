@@ -1,13 +1,13 @@
 import abc
 
-from protocol.packets.packetbase import PacketBase
+from protocol.packets.base import PacketBase
 
-from protocol.fields.headerfields import VersionField, CodeField, \
-    PayloadSizeField
-from protocol.fields.payloadfields import NoClientIDField, ClientsField, \
-    RequestedClientIDField, PublicKeyField
-from protocol.fields.messagefields import ReceiverClientIDField, \
-    MessageIDField, MessagesField
+from protocol.fields.header import Version, Code, \
+    PayloadSize
+from protocol.fields.payload import NoClientID, Clients, \
+    RequestedClientID, PublicKey
+from protocol.fields.message import ReceiverClientID, \
+    MessageID, Messages
 
 
 class Response(PacketBase, metaclass=abc.ABCMeta):
@@ -17,9 +17,9 @@ class Response(PacketBase, metaclass=abc.ABCMeta):
     def __init__(self):
         self.payload_size = self.length_of_fields(self.payload_fields)
         self.header_fields = (
-            VersionField(self.VERSION),
-            CodeField(self.CODE),
-            PayloadSizeField(self.payload_size),
+            Version(self.VERSION),
+            Code(self.CODE),
+            PayloadSize(self.payload_size),
         )
 
 
@@ -27,14 +27,14 @@ class RegisterResponse(Response):
 
     CODE = 1000
 
-    payload_fields = (NoClientIDField(), )
+    payload_fields = (NoClientID(), )
 
 
 class ListClientsResponse(Response):
 
     CODE = 1001
 
-    payload_fields = (ClientsField(), )
+    payload_fields = (Clients(), )
 
 
 class PublicKeyResponse(Response):
@@ -42,8 +42,8 @@ class PublicKeyResponse(Response):
     CODE = 1002
 
     payload_fields = (
-        RequestedClientIDField(),
-        PublicKeyField(),
+        RequestedClientID(),
+        PublicKey(),
     )
 
 
@@ -52,8 +52,8 @@ class PushMessageResponse(Response):
     CODE = 1003
 
     payload_fields = (
-        ReceiverClientIDField(),
-        MessageIDField(),
+        ReceiverClientID(),
+        MessageID(),
     )
 
 
@@ -61,7 +61,7 @@ class PopMessagesResponse(Response):
 
     CODE = 1004
 
-    payload_fields = (MessagesField(), )
+    payload_fields = (Messages(), )
 
 
 class ErrorResponse(Response):

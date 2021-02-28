@@ -3,7 +3,7 @@ from collections import OrderedDict
 from typing import Tuple, Any, Type, NewType, Iterable
 
 from protocol.utils import abstractproperty
-from protocol.fields.fieldbase import FieldBase
+from protocol.fields.base import Base
 
 
 class PacketBase(metaclass=abc.ABCMeta):
@@ -26,11 +26,11 @@ class PacketBase(metaclass=abc.ABCMeta):
     @abstractproperty
     def CODE(self) -> int: pass
 
-    payload_fields: Tuple[FieldBase, ...]
+    payload_fields: Tuple[Base, ...]
     payload_size: int
-    header_fields: Tuple[FieldBase, ...]
+    header_fields: Tuple[Base, ...]
 
-    def length_of_fields(self, fields: Tuple[FieldBase, ...]) -> int:
+    def length_of_fields(self, fields: Tuple[Base, ...]) -> int:
         return sum(field.length for field in fields)
 
     def __str__(self):
@@ -63,8 +63,8 @@ class PacketBase(metaclass=abc.ABCMeta):
 
     def _unpack_fields(
             self, packet_iter: Iterable[bytes],
-            fields: OrderedDict[str, FieldBase],
-            expected_fields: OrderedDict[str, FieldBase],
+            fields: OrderedDict[str, Base],
+            expected_fields: OrderedDict[str, Base],
     ) -> None:
         for field in expected_fields:
             field_value = field.unpack(packet_iter)
