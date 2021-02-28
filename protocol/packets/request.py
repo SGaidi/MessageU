@@ -1,8 +1,17 @@
 import abc
+from typing import Optional
 
 from protocol.utils import abstractproperty
-from protocol.fields import StaticIntField
-from protocol.packetbase import PacketBase
+from protocol.packets.packetbase import PacketBase
+from protocol.fields.fieldbase import BytesField
+
+from protocol.fields.headerfields import VersionField, CodeField, \
+    PayloadSizeField, SenderClientIDField
+from protocol.fields.payloadfields import ClientNameField, PublicKeyField
+from protocol.fields.messagefields import StaticMessageTypeField, \
+    ReceiverClientIDField, StaticMessageContentSizeField, \
+    EncryptedSymmetricKeyField, EncryptedMessageContentField, \
+    EncryptedFileContentField
 
 
 class Request(PacketBase, metaclass=abc.ABCMeta):
@@ -10,14 +19,14 @@ class Request(PacketBase, metaclass=abc.ABCMeta):
 
     VERSION = 2
 
-    CODE_FIELD = StaticIntField(name='code', value=PacketBase.CODE, length=1)
-
-    HEADER_FIELDS = (
-        PacketBase.SENDER_CLIENT_ID_FIELD,
-        PacketBase.VERSION_FIELD,
-        CODE_FIELD,
-        PacketBase.PAYLOAD_SIZE_FIELD,
-    )
+    def __init__(self):
+        self.payload_size = self.length_of_fields(self.payload_fields)
+        self.header_fields = (
+            VersionField(self.VERSION),
+            CodeField(self.CODE),
+            PayloadSizeField(self.payload_size),
+            SenderClientIDField(),
+        )
 
 
 class RegisterRequest(Request):
@@ -28,9 +37,9 @@ class RegisterRequest(Request):
 
     CODE = 100
 
-    PAYLOAD_FIELDS = (
-        PacketBase.NAME_FIELD,
-        PacketBase.PUBLIC_KEY_FIELD,
+    payload_fields = (
+        ClientNameField(),
+        PublicKeyField(),
     )
 
 
@@ -43,7 +52,7 @@ class ListClientsRequest(Request):
 
     CODE = 101
 
-    PAYLOAD_FIELDS = ()
+    payload_fields = ()
 
 
 class PublicKeyRequest(Request):
@@ -54,7 +63,7 @@ class PublicKeyRequest(Request):
 
     CODE = 102
 
-    PAYLOAD_FIELDS = (PacketBase.RECEIVER_CLIENT_ID_FIELD, )
+    payload_fields = (ClientNameField(), )
 
 
 class PushMessageRequest(Request, metaclass=abc.ABCMeta):
@@ -67,14 +76,21 @@ class PushMessageRequest(Request, metaclass=abc.ABCMeta):
     CODE = 103
 
     @abstractproperty
-    def MESSAGE_TYPE(self) -> int: pass
+    def MESSAGE_TYPE(self) -> int:
+        pass
 
-    PAYLOAD_FIELDS = (
-        PacketBase.RECEIVER_CLIENT_ID_FIELD,
-        PacketBase.MESSAGE_TYPE_FIELD,
-        PacketBase.CONTENT_SIZE_FIELD,
-        PacketBase.MESSAGE_CONTENT_FIELD,
-    )
+    # TODO: make MessageContentBaseField
+    MESSAGE_CONTENT_FIELD: Optional[BytesField]
+
+    def __int__(self):
+        self.content_size = self.MESSAGE_CONTENT_FIELD.length
+        self.payload_fields = (
+            ReceiverClientIDField(),
+            StaticMessageTypeField(self.MESSAGE_TYPE),
+            StaticMessageContentSizeField(self.content_size),
+        )
+        if self.MESSAGE_CONTENT_FIELD is not None:
+            self.payload_fields += (self.MESSAGE_CONTENT_FIELD, )
 
 
 class GetSymmetricKeyRequest(PushMessageRequest):
@@ -85,6 +101,7 @@ class GetSymmetricKeyRequest(PushMessageRequest):
     """
 
     MESSAGE_TYPE = 1
+    MESSAGE_CONTENT_FIELD = None
 
 
 class SendSymmetricKeyRequest(PushMessageRequest):
@@ -95,9 +112,7 @@ class SendSymmetricKeyRequest(PushMessageRequest):
     """
 
     MESSAGE_TYPE = 2
-
-    PAYLOAD_FIELDS = PushMessageRequest.PAYLOAD_FIELDS + \
-                     (PushMessageRequest.ENCRYPTED_SYMMETRIC_KEY_FIELD, )
+    MESSAGE_CONTENT_FIELD = EncryptedSymmetricKeyField()
 
 
 class SendMessageRequest(PushMessageRequest):
@@ -108,9 +123,7 @@ class SendMessageRequest(PushMessageRequest):
     """
 
     MESSAGE_TYPE = 3
-
-    PAYLOAD_FIELDS = PushMessageRequest.PAYLOAD_FIELDS + \
-                     (PushMessageRequest.ENCRYPTED_MESSAGE_FIELD,)
+    MESSAGE_CONTENT_FIELD = EncryptedMessageContentField()
 
 
 class SendFileRequest(PushMessageRequest):
@@ -120,9 +133,7 @@ class SendFileRequest(PushMessageRequest):
     """
 
     MESSAGE_TYPE = 3
-
-    PAYLOAD_FIELDS = PushMessageRequest.PAYLOAD_FIELDS + \
-                     (PushMessageRequest.ENCRYPTED_FILE_FIELD, )
+    MESSAGE_CONTENT_FIELD = EncryptedFileContentField()
 
 
 class PopMessagesRequest(Request):
@@ -133,8 +144,6 @@ class PopMessagesRequest(Request):
     """
 
     CODE = 104
-
-    PAYLOAD_FIELDS = ()
 
 
 Request.ALL = (

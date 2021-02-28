@@ -2,8 +2,8 @@ import socket
 from typing import Dict, Any
 
 from protocol.handlerbase import HandlerBase
-from protocol.request import Request
-from protocol.response import *
+from protocol.packets.request import Request
+from protocol.packets.response import *
 
 
 class ClientHandler(HandlerBase):

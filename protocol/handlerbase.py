@@ -1,9 +1,9 @@
 import abc
 from typing import Type, Tuple, Dict, Any, Union
 
-from protocol.packetbase import PacketBase
-from protocol.request import Request
-from protocol.response import Response
+from protocol.packets.packetbase import PacketBase
+from protocol.packets.request import Request
+from protocol.packets.response import Response
 
 
 class HandlerBase(metaclass=abc.ABCMeta):

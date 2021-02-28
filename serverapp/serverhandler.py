@@ -1,4 +1,3 @@
-import re
 import logging
 import socketserver
 from typing import Dict, Any
@@ -9,8 +8,7 @@ from protocol import exceptions
 from protocol.handlerbase import HandlerBase
 from protocol.utils import camel_case_to_snake_case
 from serverapp.models import Client, Message
-from protocol.request import Request
-from protocol.response import *
+from protocol.packets.request import Request
 
 
 class ServerHandler(HandlerBase, socketserver.BaseRequestHandler):
@@ -56,7 +54,6 @@ class ServerHandler(HandlerBase, socketserver.BaseRequestHandler):
     def handle(self) -> None:
         # TODO: wrap with try and log errors
         request_type, header_fields, payload_fields = self._expect_request()
-
         request_name = request_type.__name__[:-7]  # omit 'Request'
         method_name = '_' + camel_case_to_snake_case(request_name)
         response_kwargs = getattr(self, method_name)(payload_fields)

@@ -1,6 +1,6 @@
 import abc
-from itertools import islice
-from typing import Type, Iterator, Optional
+from itertools import islice, cycle
+from typing import Type, Iterator, Tuple, Sequence, Any
 
 
 class FieldBase(metaclass=abc.ABCMeta):
@@ -20,8 +20,7 @@ class FieldBase(metaclass=abc.ABCMeta):
             raise ValueError(f"Invalid type {type(field)!r}, "
                              f"expected {self.TYPE!r}.")
 
-    def _validate_length(self, field: str) -> None:
-        print(self)
+    def _validate_length(self, field: Sequence) -> None:
         if len(field) > self.length:
             raise ValueError(
                 f"{field!r} exceeds the {self.length!r} "
@@ -46,7 +45,7 @@ class FieldBase(metaclass=abc.ABCMeta):
     # assumes the bytes are validated by all above validators
 
 
-class IntField(FieldBase):
+class IntField(FieldBase, metaclass=abc.ABCMeta):
 
     TYPE = int
     BITS_IN_BYTE = 8
@@ -76,9 +75,9 @@ class IntField(FieldBase):
         )
 
 
-class StaticIntField(IntField):
+class StaticIntField(IntField, metaclass=abc.ABCMeta):
 
-    def __init__(self, value: int, name: str, length: int):
+    def __init__(self, name: str, value: int, length: int):
         super(StaticIntField, self).__init__(name=name, length=length)
         self.value = value
 
@@ -93,7 +92,7 @@ class StaticIntField(IntField):
         return field_value
 
 
-class StringField(FieldBase):
+class StringField(FieldBase, metaclass=abc.ABCMeta):
 
     TYPE = str
 
@@ -106,7 +105,7 @@ class StringField(FieldBase):
         return field_bytes.decode().lstrip('0')
 
 
-class UnboundedStringField(StringField):
+class UnboundedStringField(StringField, metaclass=abc.ABCMeta):
     
     def __init__(self, name: str):
         super(UnboundedStringField, self).__init__(
@@ -120,7 +119,7 @@ class UnboundedStringField(StringField):
         return bytes(bytes_iter).decode()
 
 
-class BytesField(FieldBase):
+class BytesField(FieldBase, metaclass=abc.ABCMeta):
 
     TYPE = bytes
 
@@ -145,7 +144,7 @@ class PublicKeyField(BytesField):
         return bytes(self._slice_bytes_iter(bytes_iter))
 
 
-class UnboundedBytesField(BytesField):
+class UnboundedBytesField(BytesField, metaclass=abc.ABCMeta):
 
     def __init__(self, name: str):
         super(UnboundedBytesField, self).__init__(
@@ -153,3 +152,51 @@ class UnboundedBytesField(BytesField):
 
     def unpack(self, bytes_iter: Iterator[bytes]) -> str:
         return bytes(bytes_iter)
+
+
+class CompoundField(FieldBase, metaclass=abc.ABCMeta):
+
+    @property
+    def TYPE(self) -> Type: Tuple
+
+    def __init__(
+            self, fields: Tuple[FieldBase, ...], name: str,
+    ):
+        compound_length = sum(field.length for field in fields)
+        super(CompoundField, self).__init__(name=name, length=compound_length)
+        self.fields = fields
+
+    def _validate_type(self, fields_values: Tuple[Any]) -> None:
+        super(CompoundField, self)._validate_type(fields_values)
+        fields_values_iter = iter(fields_values)
+        for field in cycle(self.fields):
+            field_value = next(fields_values_iter)
+            field._validate_type(field_value)
+
+    def _validate_length(self, fields_values: Tuple[Any]) -> None:
+        # TODO: make method _get_length(field_value)
+        # TODO: also use field_value and field_bytes OR unpacked_field and
+        #  packed_field
+        # super(CompoundField, self)._validate_length(fields_values)
+        pass
+        # TODO: validate field count, and each field length and total length (overkill?)
+
+    def _validate_encoding(self, field: bytes) -> None:
+        # TODO: same, do this to each field separately
+        pass
+
+    def pack(self, fields_values: Tuple[Any]) -> bytes:
+        fields_values_iter = iter(fields_values)
+        compound_bytes = []
+        for field in cycle(self.fields):
+            field_value = next(fields_values_iter)
+            field_bytes = field.pack(field_value)
+            compound_bytes.append(field_bytes)
+        return b''.join(compound_bytes)
+
+    def unpack(self, bytes_iter: Iterator[bytes]) -> TYPE:
+        fields_values = []
+        for field in cycle(self.fields):
+            field_value = field.unpack(bytes_iter)
+            fields_values.append(field_value)
+        return fields_values

@@ -3,7 +3,7 @@ from typing import Tuple
 
 from protocol import exceptions
 from clientapp.clienthandler import ClientHandler
-from protocol.request import Request, RegisterRequest
+from protocol.packets.request import RegisterRequest
 
 
 class OtherClient:
@@ -44,8 +44,10 @@ class ClientApp:
     def __init__(self):
         self.host, self.port = self._read_server_host_and_port()
         self.handler = ClientHandler()
+        # TODO: load user info if exists
 
     def _register(self) -> str:
+        # TODO: overwrite?
         if os.path.exists(ClientApp.ME_FILENAME):
             raise exceptions.ClientAppInvalidRequestError(
                 f"User is already defined in {ClientApp.ME_FILENAME}.")
