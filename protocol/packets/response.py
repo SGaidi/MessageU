@@ -1,10 +1,11 @@
 import abc
+from typing import Any
+from collections import OrderedDict
 
 from protocol.packets.base import PacketBase
 
-from protocol.fields.header import StaticVersion, StaticCode, \
-    PayloadSize
-from protocol.fields.payload import NoClientID, Clients, \
+from protocol.fields.header import Version, ResponseCode, PayloadSize, SenderClientID
+from protocol.fields.payload import Clients, \
     RequestedClientID, PublicKey
 from protocol.fields.message import ReceiverClientID, \
     MessageID, Messages
@@ -13,18 +14,20 @@ from protocol.fields.message import ReceiverClientID, \
 class Response(PacketBase, metaclass=abc.ABCMeta):
 
     VERSION = 2
+    CODE = None
 
-    def __init__(self):
-        super(Response, self).__init__()
-        self.payload_size = self._length_of_fields(self.payload_fields)
-        self.header_fields += (PayloadSize(self.payload_size), )
+    HEADER_FIELDS_TEMPLATE = (
+        Version(VERSION),
+        ResponseCode(CODE),
+        PayloadSize(),
+    )
 
 
 class RegisterResponse(Response):
 
     CODE = 1000
 
-    payload_fields = (NoClientID(), )
+    payload_fields = (ReceiverClientID(), )
 
 
 class ListClientsResponse(Response):
@@ -32,6 +35,15 @@ class ListClientsResponse(Response):
     CODE = 1001
 
     payload_fields = (Clients(), )
+
+    @property
+    def compound_length(self) -> int:
+        return sum(field.length for field in self.payload_fields[0].fields)
+    
+    def pack(self, clients_count: int, **kwargs: OrderedDict[str, Any]) -> bytes:
+        self.payload_size = self.compound_length * clients_count
+        self._update_header_value('payload_size', self.payload_size)
+        return super(ListClientsResponse, self).pack(**kwargs)
 
 
 class PublicKeyResponse(Response):

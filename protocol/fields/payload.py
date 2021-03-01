@@ -1,4 +1,4 @@
-from protocol.fields.base import String, StaticInt, Compound, Int, \
+from protocol.fields.base import String, Compound, Int, \
     BoundedBytes, ClientID
 
 
@@ -23,14 +23,6 @@ class PublicKey(BoundedBytes):
             base64.b64encode(base64.b64decode(field_value)) == field_value
         except Exception as e:
             raise ValueError(f"Invalid encoding: {e!r}")
-
-
-class NoClientID(StaticInt):
-
-    def __init__(self):
-        super(NoClientID, self).__init__(
-            name='no_client_id', value=0, length=16,
-        )
 
 
 class Clients(Compound):

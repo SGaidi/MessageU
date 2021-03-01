@@ -1,5 +1,4 @@
 import abc
-import re
 
 
 class classproperty(object):
@@ -16,3 +15,9 @@ def abstractproperty(func):
 def camel_case_to_snake_case(text: str) -> str:
     import re
     return re.sub(r'(?<!^)(?=[A-Z])', '_', text).lower()
+
+
+def ncycles(iterable, n):
+    from itertools import chain, repeat
+    "Returns the sequence elements n times"
+    return chain.from_iterable(repeat(tuple(iterable), n))

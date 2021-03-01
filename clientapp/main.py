@@ -3,7 +3,7 @@ from typing import Tuple
 
 from common import exceptions
 from clientapp.handler import ClientHandler
-from protocol.packets.request import RegisterRequest
+
 
 
 class OtherClient:
@@ -41,34 +41,54 @@ class ClientApp:
         #     )
         return host, port
 
+    def _load_user_info_if_exists(self):
+        if not os.path.exists(ClientApp.ME_FILENAME):
+            return
+        with open(ClientApp.ME_FILENAME, 'r') as file:
+            self.client_name, client_id, self.client_public_key = file
+        self.client_id = int(client_id, 16)
+
     def __init__(self):
         host, port = self._read_server_host_and_port()
         self.handler = ClientHandler(host, port)
-        # TODO: load user info if exists
+        self._load_user_info_if_exists()
 
     def _register(self) -> str:
-        # TODO: overwrite?
+        from protocol.packets.request import RegisterRequest
         if os.path.exists(ClientApp.ME_FILENAME):
-            raise exceptions.ClientAppInvalidRequestError(
-                f"User is already defined in {ClientApp.ME_FILENAME}.")
+            user_input = input(
+                f"User is already defined in {ClientApp.ME_FILENAME}.\n"
+                f"Registering will discard the file content.\n"
+                f"Do you wish to continue (Y/N)? ")
+            if user_input != 'Y':
+                return
+
         name = input("Enter your name: ")
         public_key = input("Enter your public-key: ")
         public_key_bytes = public_key.encode('ascii')
         request = RegisterRequest()
-        fields = {'sender_client_id': 0, 'client_name': name, 'public_key': public_key_bytes}
-        response_fields = self.handler.handle(request, fields)
-        client_id = response_fields['client_id']
+        fields_to_pack = {'client_name': name, 'public_key': public_key_bytes}
+        response_fields = self.handler.handle(request, fields_to_pack)
+
+        client_id = response_fields['receiver_client_id']
         with open(ClientApp.ME_FILENAME, 'w+') as file:
             file.write(
                 f"{name}\n"
                 f"{hex(client_id)}\n"
                 f"{public_key}\n"
             )
+        self.client_name = name
+        self.client_id = client_id
+        self.client_public_key = public_key
         return f"Successfully registered '{name}' " \
-               f"with public-key {public_key}. Your ID is {client_id}."
+               f"with public-key {public_key[10:]}...\n" \
+               f"Your ID is {client_id}."
 
     def _list_clients(self):
-        pass
+        from protocol.packets.request import ListClientsRequest
+        request = ListClientsRequest()
+        fields_to_pack = {'sender_client_id': self.client_id}
+        response_fields = self.handler.handle(request, fields_to_pack)
 
     def _get_public_key(self):
         name = input("Enter client name: ")
@@ -154,12 +174,14 @@ class ClientApp:
 
     def run(self):
 
-        last_command_output = ''
+        last_command_output = None
 
         while True:
+
             # self._clear_screen()
-            print(f"*********************************\n"
-                  f"{last_command_output}")
+            if last_command_output is not None:
+                print(f"*********************************\n"
+                      f"{last_command_output}")
 
             user_input = input(
                 f"*********************************\n"

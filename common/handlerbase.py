@@ -1,5 +1,5 @@
 import abc
-from typing import Type, Tuple, Dict, Any, Optional
+from typing import Type, Tuple, Dict, Any, Union
 
 from protocol.packets.base import PacketBase
 from protocol.packets.request import Request
@@ -15,25 +15,21 @@ class HandlerBase(metaclass=abc.ABCMeta):
         raise ValueError(f"Unexpected code {code}!")
 
     def _expect_packet(
-            self, socket,
+            self, socket, packet: Union[Request, Response],
     ) -> Tuple[Type[PacketBase], Dict[str, Any], Dict[str, Any]]:
+        print(f"Expect: {packet!r}, {packet.HEADER_LENGTH}")
+        header = socket.recv(packet.HEADER_LENGTH)
+        header_fields = packet.unpack_header(header)
 
-        partial_header_length = PacketBase.BASE_HEADER_LENGTH
-        print(partial_header_length)
-        partial_header = socket.recv(partial_header_length)
-        partial_header_fields = PacketBase.unpack_base_header(partial_header)
-
-        code = partial_header_fields['code']
+        code = header_fields['code']
         packet_concrete_type = self.get_concrete_packet_type(code)()
-        header_length = packet_concrete_type.HEADER_LENGTH
-        remaining_header_length = header_length - partial_header_length
-        header = partial_header + socket.recv(remaining_header_length)
-        header_fields = packet_concrete_type.unpack_header(header)
-
         payload_size = header_fields['payload_size']
+        socket.settimeout(2)
+        print(f"Getting {payload_size}")
+
+        # TODO: why is it still blocking?
         received_payload = socket.recv(payload_size)
-        print(f'size: {payload_size}')
-        print(f'receive: {len(received_payload)}')
+        print("UNPACK")
         payload_fields = \
             packet_concrete_type.unpack_payload(header_fields, received_payload)
 

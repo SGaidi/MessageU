@@ -1,4 +1,4 @@
-from protocol.fields.base import StaticInt, Int, ClientID, UnboundedBytes, \
+from protocol.fields.base import Int, ClientID, UnboundedBytes, \
     BoundedBytes, Compound
 from protocol.fields.header import SenderClientID
 
@@ -9,14 +9,6 @@ class ReceiverClientID(ClientID):
         super(ReceiverClientID, self).__init__(name='receiver_client_id')
 
 
-class StaticMessageType(StaticInt):
-
-    def __init__(self, message_type: int):
-        super(MessageType, self).__init__(
-            name='message_type', value=message_type, length=1,
-        )
-
-
 class MessageType(Int):
 
     def __init__(self):
@@ -25,7 +17,7 @@ class MessageType(Int):
         )
 
 
-class StaticMessageContentSize(StaticInt):
+class MessageContentSize(Int):
 
     def __init__(self, message_content_size: int):
         super(MessageContentSize, self).__init__(

@@ -33,10 +33,17 @@ class ClientAppInvalidRequestError(ValueError):
 
 
 class PacketBaseValueError(ValueError):
-    """Raised when validation of packet base failes."""
+    """Raised when validation of packet base fails."""
 
     def __init__(self, packet, message: str):
         super(PacketBaseValueError, self).__init__(f"{packet!s:}: {message}")
+
+
+class FieldBaseValueError(ValueError):
+    """Raised when validation of field base fails."""
+
+    def __init__(self, field, message: str):
+        super(FieldBaseValueError, self).__init__(f"{field!s:}: {message}")
 
 
 class ConnectionException(Exception):

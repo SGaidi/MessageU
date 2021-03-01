@@ -1,11 +1,11 @@
 import abc
+from copy import deepcopy
 from collections import OrderedDict
 from typing import Tuple, Any, NewType, Iterable
 
 from common.utils import abstractproperty, classproperty
 from common.exceptions import PacketBaseValueError
 from protocol.fields.base import Base
-from protocol.fields.header import Version, RequestCode, StaticVersion, StaticCode
 
 
 class PacketBase(metaclass=abc.ABCMeta):
@@ -32,25 +32,28 @@ class PacketBase(metaclass=abc.ABCMeta):
 
     @classmethod
     def _length_of_fields(cls, fields: Tuple[Base, ...]) -> int:
-        fields_str = ', '.join(str(f) for f in fields)
-        print(f'length of {fields_str}')
-        print(sum(field.length for field in fields))
         return sum(field.length for field in fields)
 
-    BASE_HEADER_FIELDS = (Version(), RequestCode(),)
+    @abstractproperty
+    def HEADER_FIELDS_TEMPLATE(self) -> Tuple[Base]: pass
 
     @classproperty
-    def BASE_HEADER_LENGTH(cls) -> int:
-        return cls._length_of_fields(cls.BASE_HEADER_FIELDS)
-    @property
     def HEADER_LENGTH(self) -> int:
-        return self._length_of_fields(self.header_fields)
+        return self._length_of_fields(self.HEADER_FIELDS_TEMPLATE)
+
+    def _update_header_value(self, field_name: str, field_value: Any) -> None:
+        for header in self.header_fields:
+            if header.name == field_name:
+                header.value = field_value
+                return
+        raise PacketBaseValueError(self, f"Invalid field name {field_name!s}!")
 
     def __init__(self):
-        self.header_fields = (
-            StaticVersion(self.VERSION),
-            StaticCode(self.CODE),
-        )
+        self.header_fields = deepcopy(self.HEADER_FIELDS_TEMPLATE)
+        if hasattr(self, 'payload_fields'):
+            self.payload_size = self._length_of_fields(self.payload_fields)
+            self._update_header_value('payload_size', self.payload_size)
+        self._update_header_value('code', self.CODE)
 
     def __str__(self):
         """Returns string with basic attributes."""
@@ -62,21 +65,26 @@ class PacketBase(metaclass=abc.ABCMeta):
                f"payload=({payload_str}))"
 
     def pack(self, **kwargs: OrderedDict[str, Any]) -> bytes:
-        fields_bytes = []
         all_fields = self.header_fields + self.payload_fields
-        print(all_fields)
+        fields_bytes = []
+
+        import logging
+        logging.debug(self)
+
         for field in all_fields:
             name = field.name
-            print(f"{name}:{field}")
             try:
                 field_value = kwargs.pop(name)
             except KeyError:
-                # raise PacketBaseValueError(f"Missing field {name}.")
-                print(f'using default={field.value}')
-                field_bytes = field.pack()
-            else:
-                print(f'value={field_value}')
-                field_bytes = field.pack(field_value)
+                if field.value is None:
+                    raise PacketBaseValueError(
+                        self, f"Missing field {name!s}.")
+                field_value = field.value
+            logging.debug(f"Packing {field} with {field_value}")
+            # if not isinstance(field_value, Tuple):
+            #     field_values = [field_value]
+            # for field_value in field_values:
+            field_bytes = field.pack(field_value)
             fields_bytes.append(field_bytes)
         return b''.join(fields_bytes)
 
@@ -84,24 +92,22 @@ class PacketBase(metaclass=abc.ABCMeta):
         if len(packet) < self.HEADER_LENGTH:
             raise PacketBaseValueError(
                 self,
-                f"Packet length {len(packet)} is higher then expected "
+                f"Packet length {len(packet)} is lower then expected "
                 f"header length {self.HEADER_LENGTH}.")
 
     @classmethod
     def _unpack_fields(
             cls, packet_iter: Iterable[bytes],
-            expected_fields: OrderedDict[str, Base],
+            expected_fields: OrderedDict[str, Base], bytes_length: int = 0,
     ) -> OrderedDict[str, Base]:
         fields = OrderedDict()
         for field in expected_fields:
-            field_value = field.unpack(packet_iter)
+            if bytes_length:
+                field_value = field.unpack(packet_iter, bytes_length)
+            else:
+                field_value = field.unpack(packet_iter)
             fields[field.name] = field_value
         return fields
-
-    @classmethod
-    def unpack_base_header(cls, packet: bytes) -> OrderedDict[str, Any]:
-        packet_iter = iter(packet)
-        return cls._unpack_fields(packet_iter, cls.BASE_HEADER_FIELDS)
 
     def _validate_payload_length(
             self, payload: bytes, expected_payload_length: int,
@@ -123,7 +129,10 @@ class PacketBase(metaclass=abc.ABCMeta):
         if self.__class__.__name__ == 'PacketBase':
             raise NotImplementedError(f'Should be called from child class.')
         expected_payload_length = header_fields['payload_size']
+
         self._validate_payload_length(payload, expected_payload_length)
         packet_iter = iter(payload)
-        payload_fields = self._unpack_fields(packet_iter, self.payload_fields)
+
+        payload_fields = self._unpack_fields(
+            packet_iter, self.payload_fields, len(payload))
         return payload_fields

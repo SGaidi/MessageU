@@ -1,14 +1,15 @@
 import abc
-from typing import Optional
+from typing import Optional, Any
 
 from common.utils import abstractproperty
 from protocol.packets.base import PacketBase
 from protocol.fields.base import Bytes
 
-from protocol.fields.header import PayloadSize, SenderClientID
+from protocol.fields.header import Version, RequestCode, PayloadSize, \
+    SenderClientID
 from protocol.fields.payload import ClientName, PublicKey
-from protocol.fields.message import StaticMessageType, ReceiverClientID, \
-    StaticMessageContentSize, EncryptedSymmetricKey, EncryptedMessageContent, \
+from protocol.fields.message import MessageType, ReceiverClientID, \
+    MessageContentSize, EncryptedSymmetricKey, EncryptedMessageContent, \
     EncryptedFileContent
 
 
@@ -16,14 +17,23 @@ class Request(PacketBase, metaclass=abc.ABCMeta):
     """Abstract class of a request in MessageU protocol."""
 
     VERSION = 2
+    CODE = None
+
+    HEADER_FIELDS_TEMPLATE = (
+        Version(VERSION),
+        RequestCode(),
+        PayloadSize(),
+        SenderClientID(),
+    )
 
     def __init__(self):
         super(Request, self).__init__()
-        self.payload_size = self._length_of_fields(self.payload_fields)
-        self.header_fields += (
-            PayloadSize(self.payload_size),
-            SenderClientID(),
-        )
+        self._update_header_value('code', self.CODE)
+
+
+# class AnyRequest(Request):
+#
+#     CODE = None
 
 
 class RegisterRequest(Request):
@@ -33,6 +43,10 @@ class RegisterRequest(Request):
     """
 
     CODE = 100
+
+    def __init__(self):
+        super(RegisterRequest, self).__init__()
+        self._update_header_value('sender_client_id', 0)
 
     payload_fields = (
         ClientName(),
@@ -79,12 +93,12 @@ class PushMessageRequest(Request, metaclass=abc.ABCMeta):
     # TODO: make MessageContentBaseField
     MESSAGE_CONTENT_FIELD: Optional[Bytes]
 
-    def __int__(self):
+    def __init__(self):
         self.content_size = self.MESSAGE_CONTENT_FIELD.length
         self.payload_fields = (
             ReceiverClientID(),
-            StaticMessageType(self.MESSAGE_TYPE),
-            StaticMessageContentSize(self.content_size),
+            MessageType(self.MESSAGE_TYPE),
+            MessageContentSize(self.content_size),
         )
         if self.MESSAGE_CONTENT_FIELD is not None:
             self.payload_fields += (self.MESSAGE_CONTENT_FIELD, )
