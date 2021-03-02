@@ -23,7 +23,16 @@ def camel_case_to_snake_case(text: str) -> str:
     return re.sub(r'(?<!^)(?=[A-Z])', '_', text).lower()
 
 
-def ncycles(iterable, n):
-    from itertools import chain, repeat
-    "Returns the sequence elements n times"
-    return chain.from_iterable(repeat(tuple(iterable), n))
+def islice(iterable, stop):
+    it = iter(range(stop))
+    nexti = next(it)
+
+    try:
+        for i, element in enumerate(iterable):
+            if i == nexti:
+                yield element
+                nexti = next(it)
+    except StopIteration:
+        # Consume to *stop*.
+        for i, element in zip(range(i + 1, stop), iterable):
+            pass

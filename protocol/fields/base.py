@@ -1,8 +1,8 @@
 import abc
-from itertools import islice, cycle
+from itertools import cycle
 from typing import Type, Iterator, Tuple, Sequence, Any, Optional
 
-from common.utils import abstractproperty, ncycles
+from common.utils import abstractproperty, islice
 from common.exceptions import FieldBaseValueError
 
 
@@ -68,7 +68,10 @@ class SequenceMixin:
 class BoundedMixin:
 
     def _slice_bytes_iter(self, bytes_iter: Iterator[bytes]) -> bytes:
-        return bytes(islice(bytes_iter, self.length))
+        sliced_bytes = bytes(islice(bytes_iter, self.length))
+        if sliced_bytes is b'':
+            raise StopIteration
+        return sliced_bytes
 
 
 class Int(FieldBase, BoundedMixin, metaclass=abc.ABCMeta):
@@ -153,9 +156,7 @@ class UnboundedBytes(Bytes, metaclass=abc.ABCMeta):
         super(UnboundedBytes, self).__init__(
             name=name, length=float('inf'))
 
-    def unpack(
-            self, bytes_iter: Iterator[bytes], bytes_length: int,
-    ) -> str:
+    def unpack(self, bytes_iter: Iterator[bytes]) -> str:
         return bytes(bytes_iter)
 
 
@@ -196,11 +197,13 @@ class Compound(FieldBase, metaclass=abc.ABCMeta):
             compound_bytes.append(field_bytes)
         return b''.join(compound_bytes)
 
-    def unpack(self, bytes_iter: Iterator[bytes], bytes_length: int) -> TYPE:
+    def unpack(self, bytes_iter: Iterator[bytes]) -> TYPE:
         fields_values = []
-        repeat_count = int(bytes_length / self.compound_length)
-        for field in ncycles(self.fields, repeat_count):
-            field_value = field.unpack(bytes_iter)
+        for field in cycle(self.fields):
+            try:
+                field_value = field.unpack(bytes_iter)
+            except StopIteration:
+                break
             fields_values.append(field_value)
         return tuple(fields_values)
 
