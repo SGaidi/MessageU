@@ -22,6 +22,8 @@ class Response(PacketBase, metaclass=abc.ABCMeta):
         PayloadSize(),
     )
 
+    payload_fields = ()
+
 
 class RegisterResponse(Response):
 
@@ -76,6 +78,8 @@ class PopMessagesResponse(Response):
 class ErrorResponse(Response):
 
     CODE = 9000
+
+    # TODO: add error message...
 
 
 Response.ALL = (

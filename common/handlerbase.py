@@ -2,6 +2,7 @@ import abc
 from typing import Type, Tuple, Union
 
 from common.utils import Fields
+from common.exceptions import FieldBaseValueError
 from protocol.packets.base import PacketBase
 from protocol.packets.request import Request
 from protocol.packets.response import Response
@@ -18,22 +19,19 @@ class HandlerBase(metaclass=abc.ABCMeta):
     def _expect_packet(
             self, socket, packet: Union[Request, Response],
     ) -> Tuple[Type[PacketBase], Fields, Fields]:
-        print(f"Expect: {packet!r}, {packet.HEADER_LENGTH}")
         header = socket.recv(packet.HEADER_LENGTH)
-        header_fields = packet.unpack_header(header)
+        try:
+            header_fields = packet.unpack_header(header)
+        except FieldBaseValueError:
+            raise RuntimeError("Server responded with general error!")
 
         code = header_fields['code']
         packet_concrete_type = self.get_concrete_packet_type(code)()
         payload_size = header_fields['payload_size']
         socket.settimeout(2)
-        print(f"Getting {payload_size}")
 
-        # TODO: why is it still blocking?
         received_payload = socket.recv(payload_size)
-        print("UNPACK")
         payload_fields = \
             packet_concrete_type.unpack_payload(header_fields, received_payload)
 
         return packet_concrete_type, header_fields, payload_fields
-
-        # TODO: here handle buffered data

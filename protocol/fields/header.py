@@ -1,10 +1,7 @@
 from protocol.fields.base import Int, ClientID
 
 
-# TODO: after logic si done, convert some classes to typing?
-
-# TODO: maybe remove some 'static' classes and add value=None that must be filled.
-#  for this, need to map the headers better.
+# TODO: after logic is done, convert some classes to typing?
 
 
 class Version(Int):

@@ -5,7 +5,7 @@ from enumchoicefield import EnumChoiceField, ChoiceEnum
 
 class Client(models.Model):
 
-    # TODO: override tables names
+    # TODO: override tables names?
 
     # Python strings are UTF-8, because ASCII is a subset of UTF-8, it's valid
     name = models.CharField(

@@ -5,13 +5,6 @@ from common import exceptions
 from clientapp.handler import ClientHandler
 
 
-
-class OtherClient:
-    id: int
-    public_key: int
-    symmetrical_key: int
-
-
 class ClientApp:
 
     VERSION = 2
@@ -20,7 +13,7 @@ class ClientApp:
 
     @staticmethod
     def _read_server_host_and_port() -> Tuple[str, int]:
-        # TODO: add BASE_URL
+        # TODO: add BASE_URL?
         with open(ClientApp.SERVER_FILENAME) as file:
             try:
                 content = file.read()
@@ -30,15 +23,9 @@ class ClientApp:
         try:
             host, port = content.strip().split(':')
             port = int(port)
-        except ValueError as e:
+        except ValueError:
             raise exceptions.ServerAppConfigurationError(
                 f"Invalid port format: {content}. Should be an integer.")
-        # TODO: validate host and port format?
-        # if not (ServerApp.MIN_PORT <= port <= ServerApp.MAX_PORT):
-        #     raise exceptions.ServerAppConfigurationError(
-        #         f"Invalid port ({port}), "
-        #         f"not in range: ({ServerApp.MIN_PORT}, {ServerApp.MAX_PORT})"
-        #     )
         return host, port
 
     def _load_user_info_if_exists(self):
@@ -91,6 +78,8 @@ class ClientApp:
         fields_to_pack = {'sender_client_id': self.client_id}
         response_fields = self.handler.handle(request, fields_to_pack)
         clients = response_fields['clients']
+        if not clients:
+            return 'No clients registered yet.'
 
         client_strings = []
         for idx in range(len(clients) // 2):
@@ -103,9 +92,13 @@ class ClientApp:
         from protocol.packets.request import PublicKeyRequest
         name = input("Enter client name: ")
         request = PublicKeyRequest()
-        response_fields = self.handler.handle(request, {'client_name': name})
+        request_fields = {
+            'client_name': name, 'sender_client_id': self.client_id,
+        }
+        response_fields = self.handler.handle(request, request_fields)
         public_key = response_fields['public_key']
-        return f"{name!s}: {public_key}"
+        client_id = response_fields['requested_client_id']
+        return f"{client_id}: {public_key!s}"
 
     def _pop_messages(self):
         try:
@@ -163,8 +156,8 @@ class ClientApp:
         except Exception:
             pass
 
-    def _wrong_option(self):
-        print(f"Wrong option. Please try again.")
+    def _wrong_option(self) -> str:
+        return "Wrong option. Please try again."
 
     OPTION_CODE_TO_ACTION = {
         1: _register,
@@ -219,10 +212,6 @@ class ClientApp:
             action = ClientApp.OPTION_CODE_TO_ACTION.get(
                 selected_option, ClientApp._wrong_option)
             last_command_output = action(self)
-            # try:
-            #     last_command_output = action(self)
-            # except Exception as e:
-            #     last_command_output = f"Server responded with an error: {e!r}"
 
 
 def run():

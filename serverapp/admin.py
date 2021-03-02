@@ -1,3 +1,9 @@
 from django.contrib import admin
 
-# Register your models here.
+from serverapp.models import Client
+
+
+@admin.register(Client)
+class ClientAdmin(admin.ModelAdmin):
+
+    readonly_fields = ('name', 'public_key')

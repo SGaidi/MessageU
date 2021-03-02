@@ -160,7 +160,7 @@ class Bytes(Base, SequenceMixin, metaclass=abc.ABCMeta):
 class BoundedBytes(Bytes, BoundedMixin, metaclass=abc.ABCMeta):
 
     def unpack(self, bytes_iter: Iterator[bytes], bytes_length: int) -> str:
-        field_value = self._slice_bytes_iter(bytes_iter)
+        field_value = self._slice_bytes_iter(bytes_iter, bytes_length)
         self._validate_static_value(field_value)
         return field_value
 
