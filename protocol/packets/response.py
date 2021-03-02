@@ -1,10 +1,8 @@
 import abc
-from typing import Any
-from collections import OrderedDict
 
 from common.utils import Fields
 from protocol.packets.base import PacketBase
-from protocol.fields.header import Version, ResponseCode, PayloadSize, SenderClientID
+from protocol.fields.header import Version, ResponseCode, PayloadSize
 from protocol.fields.payload import Clients, \
     RequestedClientID, PublicKey
 from protocol.fields.message import ReceiverClientID, \
@@ -74,19 +72,26 @@ class PopMessagesResponse(Response):
 
     payload_fields = (Messages(), )
 
+    @property
+    def compound_length(self) -> int:
+        return sum(field.length for field in self.payload_fields[0].fields)
+
+    def pack(self, messages_count: int, **kwargs: Fields) -> bytes:
+        return super(PopMessagesResponse, self).pack(**kwargs)
+        self.payload_size = self.compound_length * messages_count
+        self._update_header_value('payload_size', self.payload_size)
+
 
 class ErrorResponse(Response):
 
     CODE = 9000
 
-    # TODO: add error message...
 
-
-Response.ALL = (
+Response.ALL_RESPONSES = (
     RegisterResponse, ListClientsResponse, PublicKeyResponse,
     PushMessageResponse, PopMessagesResponse, PopMessagesResponse,
     ErrorResponse,
 )
 
 
-__all__ = [cls.__name__ for cls in Response.ALL]
+__all__ = [cls.__name__ for cls in Response.ALL_RESPONSES]

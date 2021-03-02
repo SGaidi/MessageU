@@ -22,11 +22,7 @@ from serverapp.handler import ServerHandler
 
 class ServerApp:
 
-    VERSION = 2
     PORT_FILENAME = 'port.info'
-    MIN_PORT = 1024
-    MAX_PORT = 65353
-    SOCKET_BACKLOG = 3
 
     class States(enum.Enum):
         OFFLINE, ONLINE = range(2)
@@ -81,11 +77,6 @@ class ServerApp:
         except ValueError:
             raise exceptions.ServerAppConfigurationError(
                 f"Invalid port format: {content}. Should be an integer.")
-        if not (ServerApp.MIN_PORT <= port <= ServerApp.MAX_PORT):
-            raise exceptions.ServerAppConfigurationError(
-                f"Invalid port ({port}), "
-                f"not in range: ({ServerApp.MIN_PORT}, {ServerApp.MAX_PORT})"
-            )
         return port
 
     def __init__(self):

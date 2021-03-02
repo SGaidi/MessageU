@@ -31,11 +31,6 @@ class Request(PacketBase, metaclass=abc.ABCMeta):
         self._update_header_value('code', self.CODE)
 
 
-# class AnyRequest(Request):
-#
-#     CODE = None
-
-
 class RegisterRequest(Request):
     """Registration of a new client request.
 
@@ -80,8 +75,8 @@ class PublicKeyRequest(Request):
 class PushMessageRequest(Request, metaclass=abc.ABCMeta):
     """Push a message to a client request.
 
-    Upon sending, expects a PushMessageResponse or ErrorResponse from the
-      server.
+    Upon sending, expects a PushMessageResponse child class or ErrorResponse
+      from the server.
     """
 
     CODE = 103
@@ -112,7 +107,6 @@ class GetSymmetricKeyRequest(PushMessageRequest):
     """
 
     MESSAGE_TYPE = 1
-    MESSAGE_CONTENT_FIELD = None
 
 
 class SendSymmetricKeyRequest(PushMessageRequest):
@@ -156,9 +150,15 @@ class PopMessagesRequest(Request):
 
     CODE = 104
 
+    payload_fields = ()
 
-Request.ALL = (
+
+Request.ALL_REQUESTS = (
     RegisterRequest, ListClientsRequest, PublicKeyRequest, PushMessageRequest,
+    PopMessagesRequest,
+)
+
+Request.ALL_MESSAGES = (
     GetSymmetricKeyRequest, SendSymmetricKeyRequest, SendMessageRequest,
-    SendFileRequest, PopMessagesRequest,
+    SendFileRequest,
 )

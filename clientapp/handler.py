@@ -1,6 +1,5 @@
 import socket
 from itertools import dropwhile
-from typing import Dict, Any
 
 from common.utils import Fields
 from common.handlerbase import HandlerBase
@@ -25,7 +24,7 @@ class ClientHandler(HandlerBase):
                 request.__class__.__name__[:-7] + 'Response'  # omit 'Request'
             response = next(dropwhile(
                 lambda response_t: response_t.__name__ != response_type_name,
-                Response.ALL,
+                Response.ALL_RESPONSES,
             ))()
 
             p_type, header_fields, payload_fields = \

@@ -7,7 +7,6 @@ from clientapp.handler import ClientHandler
 
 class ClientApp:
 
-    VERSION = 2
     ME_FILENAME = 'me.info'
     SERVER_FILENAME = 'server.info'
 
@@ -30,6 +29,7 @@ class ClientApp:
 
     def _load_user_info_if_exists(self):
         if not os.path.exists(ClientApp.ME_FILENAME):
+            self.client_id = None
             return
         with open(ClientApp.ME_FILENAME, 'r') as file:
             self.client_name, client_id, self.client_public_key = file
@@ -39,6 +39,10 @@ class ClientApp:
         host, port = self._read_server_host_and_port()
         self.handler = ClientHandler(host, port)
         self._load_user_info_if_exists()
+
+    @property
+    def _is_registered(self) -> bool:
+        return self.client_id is not None and self.client_name is not None
 
     def _register(self) -> str:
         from protocol.packets.request import RegisterRequest
@@ -100,12 +104,11 @@ class ClientApp:
         client_id = response_fields['requested_client_id']
         return f"{client_id}: {public_key!s}"
 
-    def _pop_messages(self):
-        try:
-            # TODO: get messages
-            messages = "blah"
-        except:
-            pass
+    def _pop_messages(self) -> str:
+        from protocol.packets.request import PopMessagesRequest
+        request = PopMessagesRequest()
+        fields_to_pack = {'sender_client_id': self.client_id}
+        response_fields = self.handler.handle(request, fields_to_pack)
 
         for message in messages:
             other_client_name = message.from_client.name
@@ -209,9 +212,13 @@ class ClientApp:
             if selected_option == 0:
                 print("Bye!")
                 return
+
             action = ClientApp.OPTION_CODE_TO_ACTION.get(
                 selected_option, ClientApp._wrong_option)
-            last_command_output = action(self)
+            if action != self._register and not self._is_registered:
+                last_command_output = "Please register."
+            else:
+                last_command_output = action(self)
 
 
 def run():

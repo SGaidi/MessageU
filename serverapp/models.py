@@ -27,10 +27,12 @@ class Message(models.Model):
     id = models.PositiveIntegerField(
         primary_key=True, help_text="Unique identifier",
         validators=[MinValueValidator(0), MaxValueValidator(2 ** 32 - 1)])
-    to_client: models.ForeignKey(
-        Client, help_text="The message recipient", on_delete=models.CASCADE)
-    from_client: models.ForeignKey(
-        Client, help_text="The message sender", on_delete=models.CASCADE)
+    to_client = models.ForeignKey(
+        Client, related_name='waiting_messages',
+        help_text="The message recipient", on_delete=models.CASCADE)
+    from_client = models.ForeignKey(
+        Client, related_name='sent_messages',
+        help_text="The message sender", on_delete=models.CASCADE)
     # did not use `type` name because it's a Python built-in
     message_type = EnumChoiceField(MessageType)  # TOOD:
     content = models.TextField(help_text="The message content")
