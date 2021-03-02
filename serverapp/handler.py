@@ -7,7 +7,7 @@ from django.core.exceptions import ValidationError
 
 from common import exceptions
 from common.handlerbase import HandlerBase
-from common.utils import camel_case_to_snake_case
+from common.utils import camel_case_to_snake_case, Fields
 from serverapp.models import Client, Message
 from protocol.packets.request import Request
 from protocol.packets.response import Response
@@ -15,12 +15,7 @@ from protocol.packets.response import Response
 
 class ServerHandler(HandlerBase, socketserver.BaseRequestHandler):
 
-    def _recv(self, buffer_size: int) -> bytes:
-        return self.request.recv(buffer_size)
-
-    """ Actions """
-
-    def _register(self, payload_fields: Dict[str, Any]) -> Dict[str, int]:
+    def _register(self, payload_fields: Fields) -> Dict[str, int]:
         clients_count = Client.objects.count()
         if clients_count > 2 ** 128 - 1:
             raise exceptions.ClientValidationError()
@@ -34,13 +29,10 @@ class ServerHandler(HandlerBase, socketserver.BaseRequestHandler):
         else:
             return {'receiver_client_id': client.id}
 
-    def _list_clients(self, request) -> Dict[str, Tuple[Union[int, str], ...]]:
+    def _list_clients(self, payload_fields: Fields) -> Dict[str, Tuple[Union[int, str], ...]]:
         clients = Client.objects.all()
         clients_dicts = []
         for client in clients:
-            # client_dict = OrderedDict()
-            # client_dict['client_id'] = client.id
-            # client_dict['client_name'] = client.name
             clients_dicts.append(client.id)
             clients_dicts.append(client.name)
         return {'clients': tuple(clients_dicts), 'clients_count': len(clients)}

@@ -11,7 +11,10 @@ class Base(metaclass=abc.ABCMeta):
     @abstractproperty
     def TYPE(self) -> Type: pass
 
-    def __init__(self, name: str, length: int = float('inf'), value: Optional = None):
+    def __init__(
+            self, name: str, length: int = float('inf'),
+            value: Optional[Any] = None,
+    ):
         self.name = name
         self.length = length
         self.value = value
@@ -26,17 +29,26 @@ class Base(metaclass=abc.ABCMeta):
                 self, f"Invalid type {type(field_value)!r}, expected "
                       f"{self.TYPE!r}.")
 
-    def _validate_length(self, field_value: TYPE) -> None: pass
+    def _validate_value_expected_length(self, field_value: TYPE) -> None: pass
 
     def _validate_encoding(self, field_value: bytes) -> None: pass
 
     def _validate_field_to_pack(self, field_value: TYPE) -> None:
         self._validate_type(field_value)
-        self._validate_length(field_value)
+        self._validate_value_expected_length(field_value)
         self._validate_encoding(field_value)
 
     @abc.abstractmethod
     def pack(self, field_value: TYPE) -> bytes: pass
+
+    def _validate_bytes_length(
+            self, bytes_length: int,
+    ) -> None:
+        if self.length is not float('inf') and bytes_length < self.length:
+            raise FieldBaseValueError(
+                self, f"Cannot slice {self.length} bytes, "
+                      f"there are only {bytes_length}."
+            )
 
     def _validate_static_value(self, field_value: TYPE) -> None:
         if self.value not in [None, float('inf')] \
@@ -46,8 +58,9 @@ class Base(metaclass=abc.ABCMeta):
                     f"{self.value!r}.")
 
     @abc.abstractmethod
-    def unpack(self, bytes_iter: Iterator[bytes]) -> TYPE: pass
-    # assumes the bytes are validated by all above validators
+    def unpack(
+            self, bytes_iter: Iterator[bytes], bytes_length: int,
+    ) -> TYPE: pass
 
 
 class SequenceMixin:
@@ -55,7 +68,7 @@ class SequenceMixin:
     @abstractproperty
     def TYPE(self) -> Sequence: pass
 
-    def _validate_length(self, field_value: Sequence) -> None:
+    def _validate_value_expected_length(self, field_value: Sequence) -> None:
         if len(field_value) > self.length:
             raise FieldBaseValueError(
                 self, f"{field_value!r} exceeds the {self.length!r} "
@@ -64,7 +77,11 @@ class SequenceMixin:
 
 class BoundedMixin:
 
-    def _slice_bytes_iter(self, bytes_iter: Iterator[bytes]) -> bytes:
+    def _slice_bytes_iter(
+            self, bytes_iter: Iterator[bytes],
+            bytes_length: int,
+    ) -> bytes:
+        self._validate_bytes_length(bytes_length)
         return bytes(islice(bytes_iter, self.length))
 
 
@@ -73,7 +90,7 @@ class Int(Base, BoundedMixin, metaclass=abc.ABCMeta):
     TYPE = int
     BITS_IN_BYTE = 8
 
-    def _validate_length(self, field_value: int) -> None:
+    def _validate_value_expected_length(self, field_value: int) -> None:
         bits_count = self.length * self.BITS_IN_BYTE
         max_value = 2 ** bits_count - 1
         if field_value > max_value:
@@ -89,8 +106,10 @@ class Int(Base, BoundedMixin, metaclass=abc.ABCMeta):
             signed=False,
         )
 
-    def unpack(self, bytes_iter: Iterator[bytes]) -> int:
-        field_bytes = self._slice_bytes_iter(bytes_iter)
+    def unpack(
+            self, bytes_iter: Iterator[bytes], bytes_length: int,
+    ) -> int:
+        field_bytes = self._slice_bytes_iter(bytes_iter, bytes_length)
         field_value = int.from_bytes(
             bytes=field_bytes,
             byteorder="little",
@@ -108,8 +127,10 @@ class String(Base, SequenceMixin, BoundedMixin, metaclass=abc.ABCMeta):
         self._validate_field_to_pack(field)
         return field.encode().zfill(self.length)
 
-    def unpack(self, bytes_iter: Iterator[bytes]) -> str:
-        field_bytes = self._slice_bytes_iter(bytes_iter)
+    def unpack(
+            self, bytes_iter: Iterator[bytes], bytes_length: int,
+    ) -> str:
+        field_bytes = self._slice_bytes_iter(bytes_iter, bytes_length)
         field_value = field_bytes.decode().lstrip('0')
         self._validate_static_value(field_value)
         return field_value
@@ -121,7 +142,9 @@ class UnboundedString(String, metaclass=abc.ABCMeta):
         self._validate_field_to_pack(field)
         return field.encode()
 
-    def unpack(self, bytes_iter: Iterator[bytes]) -> str:
+    def unpack(
+            self, bytes_iter: Iterator[bytes], bytes_length: int,
+    ) -> str:
         return bytes(bytes_iter).decode()
 
 
@@ -136,7 +159,7 @@ class Bytes(Base, SequenceMixin, metaclass=abc.ABCMeta):
 
 class BoundedBytes(Bytes, BoundedMixin, metaclass=abc.ABCMeta):
 
-    def unpack(self, bytes_iter: Iterator[bytes]) -> str:
+    def unpack(self, bytes_iter: Iterator[bytes], bytes_length: int) -> str:
         field_value = self._slice_bytes_iter(bytes_iter)
         self._validate_static_value(field_value)
         return field_value
@@ -148,13 +171,13 @@ class UnboundedBytes(Bytes, metaclass=abc.ABCMeta):
         super(UnboundedBytes, self).__init__(
             name=name, length=float('inf'))
 
-    def unpack(self, bytes_iter: Iterator[bytes]) -> str:
+    def unpack(
+            self, bytes_iter: Iterator[bytes], bytes_length: int,
+    ) -> str:
         return bytes(bytes_iter)
 
 
 class Compound(Base, metaclass=abc.ABCMeta):
-
-    # TODO: refactor
 
     @property
     def TYPE(self) -> Type: Tuple
@@ -162,22 +185,14 @@ class Compound(Base, metaclass=abc.ABCMeta):
     def __init__(
             self, fields: Tuple[Base, ...], name: str,
     ):
-        # compound_length = sum(field.length for field in fields)
-        super(Compound, self).__init__(name=name)  #, length=compound_length)
+        super(Compound, self).__init__(name=name)
         self.fields = fields
 
     @property
     def compound_length(self) -> int:
         return sum(field.length for field in self.fields)
 
-    # def _validate_type(self, fields_values: Tuple[Any]) -> None:
-    #     super(Compound, self)._validate_type(fields_values)
-    #     fields_values_iter = iter(fields_values)
-    #     for field in cycle(self.fields):
-    #         field_value = next(fields_values_iter)
-    #         field._validate_type(field_value)
-
-    def _validate_length(self, field_value: Tuple[Any]) -> None:
+    def _validate_value_expected_length(self, field_value: Tuple[Any]) -> None:
         expected_length = len(self.fields)
         for nested_values in field_value:
             actual_length = len(nested_values)
@@ -203,8 +218,9 @@ class Compound(Base, metaclass=abc.ABCMeta):
         fields_values = []
         repeat_count = int(bytes_length / self.compound_length)
         for field in ncycles(self.fields, repeat_count):
-            field_value = field.unpack(bytes_iter)
+            field_value = field.unpack(bytes_iter, bytes_length)
             fields_values.append(field_value)
+            bytes_length -= field.length
         return tuple(fields_values)
 
 

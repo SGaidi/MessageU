@@ -70,6 +70,7 @@ class ClientApp:
         fields_to_pack = {'client_name': name, 'public_key': public_key_bytes}
         response_fields = self.handler.handle(request, fields_to_pack)
 
+        # TODO: rename / refactor different client_id fields
         client_id = response_fields['receiver_client_id']
         with open(ClientApp.ME_FILENAME, 'w+') as file:
             file.write(
@@ -84,16 +85,27 @@ class ClientApp:
                f"with public-key {public_key[10:]}...\n" \
                f"Your ID is {client_id}."
 
-    def _list_clients(self):
+    def _list_clients(self) -> str:
         from protocol.packets.request import ListClientsRequest
         request = ListClientsRequest()
         fields_to_pack = {'sender_client_id': self.client_id}
         response_fields = self.handler.handle(request, fields_to_pack)
+        clients = response_fields['clients']
 
-    def _get_public_key(self):
+        client_strings = []
+        for idx in range(len(clients) // 2):
+            client_id = clients[idx*2]
+            client_name = clients[idx*2 + 1]
+            client_strings.append(f'{str(client_id).ljust(10)} {client_name}')
+        return '\n'.join(client_strings)
+
+    def _get_public_key(self) -> str:
+        from protocol.packets.request import PublicKeyRequest
         name = input("Enter client name: ")
-
-        return "public-key"
+        request = PublicKeyRequest()
+        response_fields = self.handler.handle(request, {'client_name': name})
+        public_key = response_fields['public_key']
+        return f"{name!s}: {public_key}"
 
     def _pop_messages(self):
         try:

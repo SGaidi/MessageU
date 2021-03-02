@@ -2,8 +2,8 @@ import abc
 from typing import Any
 from collections import OrderedDict
 
+from common.utils import Fields
 from protocol.packets.base import PacketBase
-
 from protocol.fields.header import Version, ResponseCode, PayloadSize, SenderClientID
 from protocol.fields.payload import Clients, \
     RequestedClientID, PublicKey
@@ -40,7 +40,7 @@ class ListClientsResponse(Response):
     def compound_length(self) -> int:
         return sum(field.length for field in self.payload_fields[0].fields)
     
-    def pack(self, clients_count: int, **kwargs: OrderedDict[str, Any]) -> bytes:
+    def pack(self, clients_count: int, **kwargs: Fields) -> bytes:
         self.payload_size = self.compound_length * clients_count
         self._update_header_value('payload_size', self.payload_size)
         return super(ListClientsResponse, self).pack(**kwargs)

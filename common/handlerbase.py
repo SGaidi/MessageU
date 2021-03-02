@@ -1,6 +1,7 @@
 import abc
-from typing import Type, Tuple, Dict, Any, Union
+from typing import Type, Tuple, Union
 
+from common.utils import Fields
 from protocol.packets.base import PacketBase
 from protocol.packets.request import Request
 from protocol.packets.response import Response
@@ -16,7 +17,7 @@ class HandlerBase(metaclass=abc.ABCMeta):
 
     def _expect_packet(
             self, socket, packet: Union[Request, Response],
-    ) -> Tuple[Type[PacketBase], Dict[str, Any], Dict[str, Any]]:
+    ) -> Tuple[Type[PacketBase], Fields, Fields]:
         print(f"Expect: {packet!r}, {packet.HEADER_LENGTH}")
         header = socket.recv(packet.HEADER_LENGTH)
         header_fields = packet.unpack_header(header)

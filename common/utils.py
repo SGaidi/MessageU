@@ -1,4 +1,9 @@
 import abc
+from collections import OrderedDict
+from typing import NewType, Union, Dict, Any
+
+
+Fields = NewType('Fields', Union[OrderedDict[str, Any], Dict[str, Any]])
 
 
 class classproperty(object):

@@ -2,6 +2,7 @@ import socket
 from itertools import dropwhile
 from typing import Dict, Any
 
+from common.utils import Fields
 from common.handlerbase import HandlerBase
 from protocol.packets.request import Request
 from protocol.packets.response import Response
@@ -13,10 +14,7 @@ class ClientHandler(HandlerBase):
         self.host = host
         self.port = port
 
-    def _recv(self, buffer_size: int) -> bytes:
-        return self.socket.recv(buffer_size)
-
-    def handle(self, request: Request, fields_to_pack: Dict[str, Any]) -> Dict[str, Any]:
+    def handle(self, request: Request, fields_to_pack: Fields) -> Fields:
         request_bytes = request.pack(**fields_to_pack)
         socket.setdefaulttimeout(3)
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
