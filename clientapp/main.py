@@ -1,8 +1,12 @@
 import os
+import logging
 from typing import Tuple
 
 from common import exceptions
 from clientapp.handler import ClientHandler
+
+
+logging.getLogger().setLevel(logging.DEBUG)
 
 
 class ClientApp:
@@ -110,16 +114,20 @@ class ClientApp:
         fields_to_pack = {'sender_client_id': self.client_id}
         response_fields = self.handler.handle(request, fields_to_pack)
 
-        for message in messages:
-            other_client_name = message.from_client.name
-            # TODO: keys messages should display differently
-            print(
-                """From: {other_client_name}
-                Content:
-                {content}
-                -----<EOM>-----
-                """.format(other_client_name=other_client_name,
-                           content=message.content))
+        # if messages.count() == 0:
+        #     return "You don't have any unread messages."
+        #
+        # messages_strings = []
+        # for message in messages:
+        #     other_client_name = message.from_client.name
+        #     # TODO: keys messages should display differently
+        #     message_string = \
+        #         f"From: {other_client_name}\n" \
+        #         f"Content:\n" \
+        #         f"{message.content!s}\n" \
+        #         F"-----<EOM>-----"
+        #     message_string.append(message_string)
+        # return '\n'.join(messages_strings)
 
     def _push_message(self):
         name = input("Enter client name: ")

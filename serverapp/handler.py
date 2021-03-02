@@ -7,7 +7,8 @@ from django.core.exceptions import ValidationError, ObjectDoesNotExist
 
 from common import exceptions
 from common.handlerbase import HandlerBase
-from common.utils import camel_case_to_snake_case, Fields
+from common.utils import camel_case_to_snake_case, FieldsValues
+from common.packer import Packer
 from serverapp.models import Client, Message
 from protocol.packets.request import Request, PushMessageRequest
 from protocol.packets.response import Response
@@ -18,7 +19,7 @@ class ServerHandler(HandlerBase, socketserver.BaseRequestHandler):
     Clients = NewType('Clients', Tuple[Union[int, str], ...])
     Messages = NewType('Messages', Tuple[str, ...])
 
-    def _register(self, fields: Fields) -> Dict[str, int]:
+    def _register(self, fields: FieldsValues) -> Dict[str, int]:
         clients_count = Client.objects.count()
         if clients_count > 2 ** 128 - 1:
             raise exceptions.ClientValidationError("Too many clients.")
@@ -36,7 +37,7 @@ class ServerHandler(HandlerBase, socketserver.BaseRequestHandler):
             return {'receiver_client_id': client.id}
 
     def _list_clients(
-            self, fields: Fields,
+            self, fields: FieldsValues,
     ) -> Dict[str, Union[int, Clients]]:
         clients = Client.objects.all()
         # we won't exclude the sender client, that's because the local me.info
@@ -47,7 +48,7 @@ class ServerHandler(HandlerBase, socketserver.BaseRequestHandler):
             clients_list.append(client.name)
         return {'clients': tuple(clients_list), 'clients_count': len(clients)}
 
-    def _public_key(self, fields: Fields) -> Dict[str, str]:
+    def _public_key(self, fields: FieldsValues) -> Dict[str, str]:
         client_name = fields['client_name']
         try:
             client = Client.objects.get(name=client_name)
@@ -71,7 +72,7 @@ class ServerHandler(HandlerBase, socketserver.BaseRequestHandler):
         raise ValueError(f"Unexpected message type {message_type}!")
 
     def _pop_messages(
-            self, fields: Fields,
+            self, fields: FieldsValues,
     ) -> Dict[str, Union[int, Messages]]:
         from serverapp.models import Message
         print("POP MESSAGES")
@@ -95,23 +96,20 @@ class ServerHandler(HandlerBase, socketserver.BaseRequestHandler):
             'messages_count': len(messages),
         }
 
-    def _push_message(self, fields: Fields):
+    def _push_message(self, fields: FieldsValues):
         try:
             message = Message.objects.create()
         except ValidationError as e:
             raise exceptions.MessageValidationError()
 
-
     def handle(self) -> None:
         from protocol.packets.response import ErrorResponse
         # TODO: wrap with try and log errors
         try:
-            request_type, header_fields, payload_fields = \
-                self._expect_packet(self.request, Request())
+            request_type, fields = self._expect_packet(self.request, Request())
             request_name = request_type.__class__.__name__[:-7]  # omit 'Request'
             method_name = '_' + camel_case_to_snake_case(request_name)
-            header_fields.update(payload_fields)
-            response_kwargs = getattr(self, method_name)(header_fields)
+            response_kwargs = getattr(self, method_name)(fields)
             logging.info(f'result: {response_kwargs}')
             response_name = request_name + 'Response'
 
@@ -120,11 +118,12 @@ class ServerHandler(HandlerBase, socketserver.BaseRequestHandler):
                 Response.ALL_RESPONSES,
             ))
             logging.debug(f"response_kwargs: {response_kwargs}")
-            response_bytes = response_type().pack(**response_kwargs)
+            response_bytes = Packer(response_type()).pack(**response_kwargs)
             self.request.send(response_bytes)
         except Exception as e:
             logging.exception(e)
-            self.request.send(ErrorResponse().pack())
+            error_bytes = Packer(ErrorResponse()).pack()
+            self.request.send(error_bytes)
         else:
             client_address = self.client_address[0]
             logging.info(f"Responded to {client_address} successfully.")

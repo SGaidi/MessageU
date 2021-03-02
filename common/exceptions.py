@@ -39,6 +39,20 @@ class PacketBaseValueError(ValueError):
         super(PacketBaseValueError, self).__init__(f"{packet!s:}: {message}")
 
 
+class PackerValueError(ValueError):
+    """Raised when packing of a packet fails."""
+
+    def __init__(self, kwargs, message: str):
+        super(PackerValueError, self).__init__(f"{kwargs!s:}: {message}")
+
+
+class UnpackerValueError(ValueError):
+    """Raised when unpacking of a packet fails."""
+
+    def __init__(self, packet, message: str):
+        super(UnpackerValueError, self).__init__(f"{packet!s:}: {message}")
+
+
 class FieldBaseValueError(ValueError):
     """Raised when validation of field base fails."""
 

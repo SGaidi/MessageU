@@ -6,14 +6,13 @@ from common.utils import abstractproperty, ncycles
 from common.exceptions import FieldBaseValueError
 
 
-class Base(metaclass=abc.ABCMeta):
+class FieldBase(metaclass=abc.ABCMeta):
 
     @abstractproperty
     def TYPE(self) -> Type: pass
 
     def __init__(
-            self, name: str, length: int = float('inf'),
-            value: Optional[Any] = None,
+            self, name: str, length: int, value: Optional[Any] = None,
     ):
         self.name = name
         self.length = length
@@ -41,15 +40,6 @@ class Base(metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def pack(self, field_value: TYPE) -> bytes: pass
 
-    def _validate_bytes_length(
-            self, bytes_length: int,
-    ) -> None:
-        if self.length is not float('inf') and bytes_length < self.length:
-            raise FieldBaseValueError(
-                self, f"Cannot slice {self.length} bytes, "
-                      f"there are only {bytes_length}."
-            )
-
     def _validate_static_value(self, field_value: TYPE) -> None:
         if self.value not in [None, float('inf')] \
                 and field_value != self.value:
@@ -69,7 +59,7 @@ class SequenceMixin:
     def TYPE(self) -> Sequence: pass
 
     def _validate_value_expected_length(self, field_value: Sequence) -> None:
-        if len(field_value) > self.length:
+        if field_value != float('inf') and len(field_value) > self.length:
             raise FieldBaseValueError(
                 self, f"{field_value!r} exceeds the {self.length!r} "
                       f"bytes length of field.")
@@ -77,15 +67,11 @@ class SequenceMixin:
 
 class BoundedMixin:
 
-    def _slice_bytes_iter(
-            self, bytes_iter: Iterator[bytes],
-            bytes_length: int,
-    ) -> bytes:
-        self._validate_bytes_length(bytes_length)
+    def _slice_bytes_iter(self, bytes_iter: Iterator[bytes]) -> bytes:
         return bytes(islice(bytes_iter, self.length))
 
 
-class Int(Base, BoundedMixin, metaclass=abc.ABCMeta):
+class Int(FieldBase, BoundedMixin, metaclass=abc.ABCMeta):
 
     TYPE = int
     BITS_IN_BYTE = 8
@@ -93,7 +79,7 @@ class Int(Base, BoundedMixin, metaclass=abc.ABCMeta):
     def _validate_value_expected_length(self, field_value: int) -> None:
         bits_count = self.length * self.BITS_IN_BYTE
         max_value = 2 ** bits_count - 1
-        if field_value > max_value:
+        if field_value != float('inf') and field_value > max_value:
             raise FieldBaseValueError(
                 self, f"{field_value!r} exceeds the {self.length!r} "
                       f"bytes length of field.")
@@ -106,10 +92,8 @@ class Int(Base, BoundedMixin, metaclass=abc.ABCMeta):
             signed=False,
         )
 
-    def unpack(
-            self, bytes_iter: Iterator[bytes], bytes_length: int,
-    ) -> int:
-        field_bytes = self._slice_bytes_iter(bytes_iter, bytes_length)
+    def unpack(self, bytes_iter: Iterator[bytes]) -> int:
+        field_bytes = self._slice_bytes_iter(bytes_iter)
         field_value = int.from_bytes(
             bytes=field_bytes,
             byteorder="little",
@@ -119,7 +103,7 @@ class Int(Base, BoundedMixin, metaclass=abc.ABCMeta):
         return field_value
 
 
-class String(Base, SequenceMixin, BoundedMixin, metaclass=abc.ABCMeta):
+class String(FieldBase, SequenceMixin, BoundedMixin, metaclass=abc.ABCMeta):
 
     TYPE = str
 
@@ -127,10 +111,8 @@ class String(Base, SequenceMixin, BoundedMixin, metaclass=abc.ABCMeta):
         self._validate_field_to_pack(field)
         return field.encode().zfill(self.length)
 
-    def unpack(
-            self, bytes_iter: Iterator[bytes], bytes_length: int,
-    ) -> str:
-        field_bytes = self._slice_bytes_iter(bytes_iter, bytes_length)
+    def unpack(self, bytes_iter: Iterator[bytes]) -> str:
+        field_bytes = self._slice_bytes_iter(bytes_iter)
         field_value = field_bytes.decode().lstrip('0')
         self._validate_static_value(field_value)
         return field_value
@@ -148,7 +130,7 @@ class UnboundedString(String, metaclass=abc.ABCMeta):
         return bytes(bytes_iter).decode()
 
 
-class Bytes(Base, SequenceMixin, metaclass=abc.ABCMeta):
+class Bytes(FieldBase, SequenceMixin, metaclass=abc.ABCMeta):
 
     TYPE = bytes
 
@@ -159,8 +141,8 @@ class Bytes(Base, SequenceMixin, metaclass=abc.ABCMeta):
 
 class BoundedBytes(Bytes, BoundedMixin, metaclass=abc.ABCMeta):
 
-    def unpack(self, bytes_iter: Iterator[bytes], bytes_length: int) -> str:
-        field_value = self._slice_bytes_iter(bytes_iter, bytes_length)
+    def unpack(self, bytes_iter: Iterator[bytes]) -> str:
+        field_value = self._slice_bytes_iter(bytes_iter)
         self._validate_static_value(field_value)
         return field_value
 
@@ -177,15 +159,15 @@ class UnboundedBytes(Bytes, metaclass=abc.ABCMeta):
         return bytes(bytes_iter)
 
 
-class Compound(Base, metaclass=abc.ABCMeta):
+class Compound(FieldBase, metaclass=abc.ABCMeta):
 
     @property
     def TYPE(self) -> Type: Tuple
 
     def __init__(
-            self, fields: Tuple[Base, ...], name: str,
+            self, fields: Tuple[FieldBase, ...], name: str,
     ):
-        super(Compound, self).__init__(name=name)
+        super(Compound, self).__init__(name=name, length=float('inf'))
         self.fields = fields
 
     @property
@@ -218,9 +200,8 @@ class Compound(Base, metaclass=abc.ABCMeta):
         fields_values = []
         repeat_count = int(bytes_length / self.compound_length)
         for field in ncycles(self.fields, repeat_count):
-            field_value = field.unpack(bytes_iter, bytes_length)
+            field_value = field.unpack(bytes_iter)
             fields_values.append(field_value)
-            bytes_length -= field.length
         return tuple(fields_values)
 
 

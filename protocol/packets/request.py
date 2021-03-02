@@ -17,7 +17,6 @@ class Request(PacketBase, metaclass=abc.ABCMeta):
     """Abstract class of a request in MessageU protocol."""
 
     VERSION = 2
-    CODE = None
 
     HEADER_FIELDS_TEMPLATE = (
         Version(VERSION),
@@ -25,10 +24,13 @@ class Request(PacketBase, metaclass=abc.ABCMeta):
         PayloadSize(),
         SenderClientID(),
     )
-
+    
     def __init__(self):
-        super(Request, self).__init__()
-        self._update_header_value('code', self.CODE)
+        if self.__class__.__name__ == 'Request':
+            # if it's not a concrete request - we don't know the payload
+            super(Request, self).__init__(payload_size=None)
+        else:
+            super(Request, self).__init__()
 
 
 class RegisterRequest(Request):
@@ -58,8 +60,6 @@ class ListClientsRequest(Request):
 
     CODE = 101
 
-    payload_fields = ()
-
 
 class PublicKeyRequest(Request):
     """Get public-key of a specific client request.
@@ -86,7 +86,7 @@ class PushMessageRequest(Request, metaclass=abc.ABCMeta):
         pass
 
     # TODO: make MessageContentBaseField
-    MESSAGE_CONTENT_FIELD: Optional[Bytes]
+    MESSAGE_CONTENT_FIELD: Optional[Bytes] = None
 
     def __init__(self):
         self.content_size = self.MESSAGE_CONTENT_FIELD.length

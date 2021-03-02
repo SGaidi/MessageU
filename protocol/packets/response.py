@@ -1,6 +1,6 @@
 import abc
 
-from common.utils import Fields
+from common.utils import FieldsValues
 from protocol.packets.base import PacketBase
 from protocol.fields.header import Version, ResponseCode, PayloadSize
 from protocol.fields.payload import Clients, \
@@ -12,15 +12,12 @@ from protocol.fields.message import ReceiverClientID, \
 class Response(PacketBase, metaclass=abc.ABCMeta):
 
     VERSION = 2
-    CODE = None
 
     HEADER_FIELDS_TEMPLATE = (
         Version(VERSION),
-        ResponseCode(CODE),
+        ResponseCode(),
         PayloadSize(),
     )
-
-    payload_fields = ()
 
 
 class RegisterResponse(Response):
@@ -36,14 +33,14 @@ class ListClientsResponse(Response):
 
     payload_fields = (Clients(), )
 
-    @property
-    def compound_length(self) -> int:
-        return sum(field.length for field in self.payload_fields[0].fields)
+    # @property
+    # def compound_length(self) -> int:
+    #     return sum(field.length for field in self.payload_fields[0].fields)
     
-    def pack(self, clients_count: int, **kwargs: Fields) -> bytes:
-        self.payload_size = self.compound_length * clients_count
-        self._update_header_value('payload_size', self.payload_size)
-        return super(ListClientsResponse, self).pack(**kwargs)
+    # def pack(self, clients_count: int, **kwargs: FieldsValues) -> bytes:
+    #     self.payload_size = self.compound_length * clients_count
+    #     self._update_header_value('payload_size', self.payload_size)
+    #     return super(ListClientsResponse, self).pack(**kwargs)
 
 
 class PublicKeyResponse(Response):
@@ -76,7 +73,7 @@ class PopMessagesResponse(Response):
     def compound_length(self) -> int:
         return sum(field.length for field in self.payload_fields[0].fields)
 
-    def pack(self, messages_count: int, **kwargs: Fields) -> bytes:
+    def pack(self, messages_count: int, **kwargs: FieldsValues) -> bytes:
         return super(PopMessagesResponse, self).pack(**kwargs)
         self.payload_size = self.compound_length * messages_count
         self._update_header_value('payload_size', self.payload_size)
