@@ -49,12 +49,11 @@ class ServerHandler(HandlerBase, socketserver.BaseRequestHandler):
         return {'clients': tuple(clients_list), 'clients_count': len(clients)}
 
     def _public_key(self, fields: FieldsValues) -> Dict[str, str]:
-        client_name = fields['client_name']
+        receiver_client_id = fields['requested_client_id']
         try:
-            client = Client.objects.get(name=client_name)
+            client = Client.objects.get(id=receiver_client_id)
         except ObjectDoesNotExist:
-            logging.exception('\n'.join(client.name for client in Client.objects.all()))
-            raise ValueError(f"No client with the name {client_name!s}.")
+            raise ValueError(f"No client with the ID {receiver_client_id}.")
         else:
             return {
                 'requested_client_id': client.id,
@@ -81,19 +80,19 @@ class ServerHandler(HandlerBase, socketserver.BaseRequestHandler):
         sender_client_id = fields['sender_client_id']
         messages = Message.objects.filter(to_client__id=sender_client_id)
 
-        messages_list = []
+        messages_tuples = []
         for message in messages:
-            messages_list.extend([
-                message.from_client.name,
+            messages_tuples.extend([
+                message.from_client.id,
                 message.id,
                 message.message_type,
                 len(message.content),
-                message.content,
+                message.content.encode(),
             ])
         messages.delete()
 
         return {
-            'messages': tuple(messages_list),
+            'messages': tuple(messages_tuples),
             'messages_count': len(messages),
         }
 

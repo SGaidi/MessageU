@@ -5,7 +5,7 @@ from protocol.packets.base import PacketBase
 
 from protocol.fields.header import Version, RequestCode, PayloadSize, \
     SenderClientID
-from protocol.fields.payload import ClientName, PublicKey
+from protocol.fields.payload import ClientName, PublicKey, RequestedClientID
 from protocol.fields.message import MessageType, ReceiverClientID, \
     MessageContentSize, EncryptedSymmetricKey, EncryptedMessageContent, \
     EncryptedFileContent, MessageContent
@@ -67,7 +67,7 @@ class PublicKeyRequest(Request):
 
     CODE = 102
 
-    payload_fields = (ClientName(), )
+    payload_fields = (RequestedClientID(), )
 
 
 class PushMessageRequest(Request, metaclass=abc.ABCMeta):

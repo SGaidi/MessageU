@@ -1,7 +1,9 @@
 from django.db import models
-from django.core.validators import MaxValueValidator
 
 from protocol.packets.request import Request
+
+
+# TODO: add __str__ implementation
 
 
 class Client(models.Model):

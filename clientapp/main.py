@@ -1,9 +1,10 @@
 import os
 import logging
-from typing import Tuple
+from typing import Tuple, Type
 
 from common import exceptions
 from clientapp.handler import ClientHandler
+from protocol.packets.request import PushMessageRequest
 
 
 logging.getLogger().setLevel(logging.DEBUG)
@@ -132,22 +133,19 @@ class ClientApp:
             client_strings.append(f'{str(client_id).ljust(10)} {client_name}')
         return '\n'.join(client_strings)
 
-    def _get_public_key(self) -> str:
+    def _get_public_key_of_client(self, receiver_client_id: int) -> bytes:
         from protocol.packets.request import PublicKeyRequest
-
-        name = input("Enter client name: ")
         request = PublicKeyRequest()
         request_fields = {
-            'client_name': name, 'sender_client_id': self.client_id,
+            'requested_client_id': receiver_client_id,
+            'sender_client_id': self.client_id,
         }
         response_fields = self.handler.handle(request, request_fields)
-
-        public_key = response_fields['public_key']
-        client_id = response_fields['requested_client_id']
-        return f"Client ID: {client_id}\n{public_key!s}"
+        return response_fields['public_key']
 
     def _pop_messages(self) -> str:
         from protocol.packets.request import PopMessagesRequest
+        from protocol.fields.message import Messages
 
         request = PopMessagesRequest()
         fields_to_pack = {'sender_client_id': self.client_id}
@@ -158,84 +156,133 @@ class ClientApp:
             return "You don't have any unread messages."
 
         messages_strings = []
-        for message in messages:
-            other_client_name = message.from_client.name
+        print(messages)
+        assert len(messages) % len(Messages().fields) == 0
+        fields_count = len(Messages().fields)
+        for idx in range(len(messages) // fields_count):
+            from_client_id = messages[idx * fields_count]
+            message_content = messages[idx * fields_count + 4]
             # TODO: keyed messages should display differently
             message_string = \
-                f"From: {other_client_name}\n" \
+                f"From: {from_client_id}\n" \
                 f"Content:\n" \
-                f"{message.content!s}\n" \
+                f"{message_content!s}\n" \
                 F"-----<EOM>-----"
-            message_string.append(message_string)
+            messages_strings.append(message_string)
         return '\n'.join(messages_strings)
 
-    def _send_message(self):
-        import binascii
-        from Crypto.PublicKey import RSA
-        from Crypto.Cipher import PKCS1_OAEP
-        from protocol.packets.request import PublicKeyRequest, \
-            SendMessageRequest
+    def _get_client_id(self) -> int:
         receiver_client_id = input("Enter client id: ")
         try:
             receiver_client_id = int(receiver_client_id)
         except ValueError:
             raise exceptions.ClientValidationError(
                 f"Invalid client ID: {receiver_client_id}")
-        message = input("Enter message: ")
+        return receiver_client_id
 
+    def _get_public_key(self) -> str:
+        from protocol.packets.request import PublicKeyRequest
+        requested_client_id = self._get_client_id()
         request = PublicKeyRequest()
         request_fields = {
-            'client_name': self.client_name,
             'sender_client_id': self.client_id,
+            'requested_client_id': requested_client_id,
         }
         response_fields = self.handler.handle(request, request_fields)
         public_key = response_fields['public_key']
+        client_id = response_fields['requested_client_id']
+        return f"Client ID: {client_id}\n{public_key!s}"
 
+    def _encrypt_content_with_public_key(
+            self, content: str, public_key: bytes,
+    ) -> bytes:
+        # TODO: encrypt symmetric
+        import binascii
+        from Crypto.PublicKey import RSA
+        from Crypto.Cipher import PKCS1_OAEP
         encryptor = PKCS1_OAEP.new(RSA.importKey(public_key))
-        encrypted = encryptor.encrypt(message.encode())
-        print(encrypted)
-        print("Encrypted:", binascii.hexlify(encrypted))
+        encrypted_content = encryptor.encrypt(content.encode())
+        print("Encrypted:", binascii.hexlify(encrypted_content))
+        return encrypted_content
 
-        request = SendMessageRequest()
+    def _send_content(
+            self, request_type: Type[PushMessageRequest],
+            receiver_client_id: int, content: str = None,
+            public_key: bytes = None,
+    ) -> str:
+        request = request_type()
         request_fields = {
             'receiver_client_id': receiver_client_id,
             'sender_client_id': self.client_id,
-            'content': encrypted,
         }
+        # TODO: change to use symmetric key
+        if content and public_key:
+            request_fields['content'] = self._encrypt_content_with_public_key(
+                content=content, public_key=public_key,
+            )
+        else:
+            request_fields['content'] = b''
         response_fields = self.handler.handle(request, request_fields)
         receiver_client_id = response_fields['receiver_client_id']
         message_id = response_fields['message_id']
         return f"Message {message_id} sent to client with ID " \
                f"{receiver_client_id}."
 
-    def _push_file(self):
-        name = input("Enter client name: ")
+    def _send_message(self):
+        from protocol.packets.request import SendMessageRequest
+        receiver_client_id = self._get_client_id()
+        # TODO: symmetric key
+        public_key = self._get_public_key_of_client(receiver_client_id)
+        message = input("Enter message: ")
+        return self._send_content(
+            request_type=SendMessageRequest,
+            receiver_client_id=receiver_client_id,
+            content=message,
+            public_key=public_key,
+        )
+
+    def _send_file(self) -> str:
+        from protocol.packets.request import SendFileRequest
+        receiver_client_id = self._get_client_id()
+        public_key = self._get_public_key_of_client(receiver_client_id)
         pathname = input("Enter pathname: ")
         if not os.path.exists(pathname):
             raise exceptions.ClientAppInvalidRequestError(
                 f"No file at: {pathname}")
-        try:
-            pass
-            # TODO: send request
-        except Exception:
-            pass
+        with open(pathname, 'r') as file:
+            file_content = file.read()
+        # TODO: use symmetric key, not public key
+        return self._send_content(
+            request_type=SendFileRequest,
+            receiver_client_id=receiver_client_id,
+            content=file_content,
+            # public_key=public_key,
+        )
 
-    def _request_symmetric_key(self):
-        name = input("Enter contact name:")
-        try:
-            pass
-            # TODO: send request
-        except Exception:
-            pass
+    def _get_symmetric_key(self) -> str:
+        from protocol.packets.request import GetSymmetricKeyRequest
+        receiver_client_id = self._get_client_id()
+        return self._send_content(
+            request_type=GetSymmetricKeyRequest,
+            receiver_client_id=receiver_client_id,
+        )
 
-    def _respond_with_symmetric_key(self):
-        name = input("Enter contact name:")
-        # TODO: create symmetric key
-        try:
-            pass
-            # TODO: send request
-        except Exception:
-            pass
+    def _send_symmetric_key(self):
+        # from Crypto.Cipher import AES
+        from Crypto.Random import get_random_bytes
+        from protocol.packets.request import SendSymmetricKeyRequest
+        receiver_client_id = self._get_client_id()
+        public_key = self._get_public_key_of_client(receiver_client_id)
+        aes_key = get_random_bytes(32)  # for AES-256
+        # TODO: use this upon sending messages
+        # iv = b''.zfill(16)
+        # aes_cbc_key = AES.new(key=key, mode=AES.MODE_CBC)#, iv=iv)
+        return self._send_content(
+            request_type=SendSymmetricKeyRequest,
+            receiver_client_id=receiver_client_id,
+            content=aes_key,
+            public_key=public_key,
+        )
 
     def _wrong_option(self) -> str:
         return "Wrong option. Please try again."
@@ -246,9 +293,9 @@ class ClientApp:
         3: _get_public_key,
         4: _pop_messages,
         5: _send_message,
-        50: _push_file,
-        51: _request_symmetric_key,
-        52: _respond_with_symmetric_key,
+        50: _send_file,
+        51: _get_symmetric_key,
+        52: _send_symmetric_key,
     }
 
     def _clear_screen(self):
@@ -294,8 +341,6 @@ class ClientApp:
             action = ClientApp.OPTION_CODE_TO_ACTION.get(
                 selected_option, ClientApp._wrong_option)
             if action.__name__ != '_register' and not self._is_registered:
-                print(action)
-                print(self._register)
                 last_command_output = "Please register."
             else:
                 last_command_output = action(self)

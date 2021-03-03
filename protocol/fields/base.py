@@ -181,6 +181,7 @@ class Compound(FieldBase, metaclass=abc.ABCMeta):
     def pack(self, fields_values: Tuple[Any]) -> bytes:
         fields_values_iter = iter(fields_values)
         compound_bytes = []
+        print(f"compound fields to pack: {self.fields}")
         for field in cycle(self.fields):
             try:
                 field_value = next(fields_values_iter)
