@@ -26,9 +26,14 @@ class Unpacker:
             expected_fields: Tuple[FieldBase],
     ) -> OrderedDict[str, FieldBase]:
         fields = OrderedDict()
+        expected_sizes = {}
         for field in expected_fields:
             field_value = field.unpack(bytes_iter)
+            if field_value == float('inf'):
+                field_value = expected_sizes[field.name]
             fields[field.name] = field_value
+            if field.name.endswith('_size'):
+                expected_sizes[field.name] = field_value
         return fields
 
     def _validate_payload_length(

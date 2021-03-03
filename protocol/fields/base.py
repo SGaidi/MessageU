@@ -30,12 +30,9 @@ class FieldBase(metaclass=abc.ABCMeta):
 
     def _validate_value_expected_length(self, field_value: TYPE) -> None: pass
 
-    def _validate_encoding(self, field_value: bytes) -> None: pass
-
     def _validate_field_to_pack(self, field_value: TYPE) -> None:
         self._validate_type(field_value)
         self._validate_value_expected_length(field_value)
-        self._validate_encoding(field_value)
 
     @abc.abstractmethod
     def pack(self, field_value: TYPE) -> bytes: pass

@@ -22,6 +22,9 @@ class Packer:
             if field_value is None:
                 raise PackerValueError(
                     kwargs, f"Missing field {name!s}.")
+            if name.endswith('_size') and field_value == float('inf'):
+                field_value = \
+                    sum(len(field_bytes) for field_bytes in fields_bytes)
             logging.debug(f"Packing {field} with {field_value}")
             field_bytes = field.pack(field_value)
             fields_bytes.append(field_bytes)

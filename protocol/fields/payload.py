@@ -5,24 +5,15 @@ from protocol.fields.base import String, Compound, Int, \
 class ClientName(String):
 
     def __init__(self):
-        super(ClientName, self).__init__(
-            name='client_name', length=255,
-        )
+        super(ClientName, self).__init__(name='client_name', length=255)
 
 
-class PublicKey(BoundedBytes):
+class PublicKey(String):
+
+    E_VALUE = 65537  # according to FIPS PUB 186-4
 
     def __init__(self):
-        super(PublicKey, self).__init__(
-            name='public_key', length=160,
-        )
-
-    def _validate_encoding(self, field_value: bytes) -> None:
-        import base64
-        try:
-            base64.b64encode(base64.b64decode(field_value)) == field_value
-        except Exception as e:
-            raise ValueError(f"Invalid encoding: {e!r}")
+        super(PublicKey, self).__init__(name='public_key', length=271)
 
 
 class Clients(Compound):

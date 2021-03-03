@@ -19,7 +19,7 @@ class HandlerBase(metaclass=abc.ABCMeta):
 
     def _expect_packet(
             self, socket, packet: Union[Request, Response],
-    ) -> Tuple[Type[PacketBase], FieldsValues, FieldsValues]:
+    ) -> Tuple[Type[PacketBase], FieldsValues]:
         header = socket.recv(packet.HEADER_LENGTH)
         unpacker = Unpacker(packet)
         try:

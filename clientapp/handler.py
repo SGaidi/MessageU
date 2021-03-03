@@ -15,8 +15,13 @@ class ClientHandler(HandlerBase):
         self.port = port
 
     def _request_type_to_response(self, request: Request) -> Response:
-        response_type_name = \
-            request.__class__.__name__.replace('Request', 'Response')
+        from protocol.packets.request import PushMessageRequest
+        if isinstance(request, PushMessageRequest):
+            response_type_name = 'PushMessageResponse'
+        else:
+            response_type_name = \
+                request.__class__.__name__.replace('Request', 'Response')
+        print(response_type_name)
         response_type = next(dropwhile(
             lambda response_t: response_t.__name__ != response_type_name,
             Response.ALL_RESPONSES,

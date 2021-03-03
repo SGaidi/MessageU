@@ -11,9 +11,9 @@ class ReceiverClientID(ClientID):
 
 class MessageType(Int):
 
-    def __init__(self):
+    def __init__(self, message_type: int = None):
         super(MessageType, self).__init__(
-            name='message_type', length=1,
+            name='message_type', value=message_type, length=1,
         )
 
 
@@ -27,9 +27,9 @@ class MessageContentSize(Int):
 
 class MessageContentSize(Int):
 
-    def __init__(self):
+    def __init__(self, content_size: int = None):
         super(MessageContentSize, self).__init__(
-            name='content_size', length=4,
+            name='content_size', value=content_size, length=4,
         )
 
 

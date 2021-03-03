@@ -81,15 +81,15 @@ class PushMessageRequest(Request, metaclass=abc.ABCMeta):
 
     CODE = 103
 
-    @abstractproperty
-    def MESSAGE_TYPE(self) -> int:
-        pass
-
-    # TODO: make MessageContentBaseField
+    MESSAGE_TYPE: int = None
+    # TODO: make MessageContentBaseField?
     MESSAGE_CONTENT_FIELD: Optional[Bytes] = None
 
     def __init__(self):
-        self.content_size = self.MESSAGE_CONTENT_FIELD.length
+        if self.MESSAGE_CONTENT_FIELD is not None:
+            self.content_size = self.MESSAGE_CONTENT_FIELD.length
+        else:
+            self.content_size = float('inf')
         self.payload_fields = (
             ReceiverClientID(),
             MessageType(self.MESSAGE_TYPE),
@@ -97,6 +97,8 @@ class PushMessageRequest(Request, metaclass=abc.ABCMeta):
         )
         if self.MESSAGE_CONTENT_FIELD is not None:
             self.payload_fields += (self.MESSAGE_CONTENT_FIELD, )
+        print(f"c size: {self.content_size}")
+        super(PushMessageRequest, self).__init__()
 
 
 class GetSymmetricKeyRequest(PushMessageRequest):
@@ -162,3 +164,5 @@ Request.ALL_MESSAGES = (
     GetSymmetricKeyRequest, SendSymmetricKeyRequest, SendMessageRequest,
     SendFileRequest,
 )
+
+Request.ALL_MESSAGES_TYPES = (message.CODE for message in Request.ALL_MESSAGES)

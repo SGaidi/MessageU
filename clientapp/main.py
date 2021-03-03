@@ -14,55 +14,87 @@ class ClientApp:
     ME_FILENAME = 'me.info'
     SERVER_FILENAME = 'server.info'
 
-    @staticmethod
-    def _read_server_host_and_port() -> Tuple[str, int]:
+    host: str
+    port: int
+    client_name: str = None
+    client_id: int = None
+    private_key: bytes = None
+
+    def _read_server_host_and_port(self) -> Tuple[str, int]:
         # TODO: add BASE_URL?
         with open(ClientApp.SERVER_FILENAME) as file:
             try:
                 content = file.read()
             except IOError as e:
                 raise exceptions.ClientAppEnvironmentException(
-                    f"Could not read port file {ClientApp.SERVER_FILENAME}: {e}")
+                    f"Could not read port file {ClientApp.SERVER_FILENAME}: "
+                    f"{e}")
         try:
-            host, port = content.strip().split(':')
-            port = int(port)
-        except ValueError:
+            self.host, port = content.strip().split(':')
+            self.port = int(port)
+        except Exception:
             raise exceptions.ServerAppConfigurationError(
-                f"Invalid port format: {content}. Should be an integer.")
-        return host, port
+                f"Invalid format: {content!s}.")
 
     def _load_user_info_if_exists(self):
+        import base64
         if not os.path.exists(ClientApp.ME_FILENAME):
-            self.client_id = None
             return
         with open(ClientApp.ME_FILENAME, 'r') as file:
-            self.client_name, client_id, self.client_public_key = file
+            try:
+                client_name, client_id, private_key_b64 = file
+            except Exception as e:
+                logging.exception(
+                    f"Could not get info from {ClientApp.ME_FILENAME}: {e!r}")
+                return
+        self.client_name = client_name.strip()
         self.client_id = int(client_id, 16)
+        private_key_bytes = base64.b64decode(private_key_b64.encode())
+        self.private_key = int.from_bytes(
+            bytes=private_key_bytes,
+            byteorder="little",
+            signed=False,
+        )
+        print(f"P: {self.private_key}")
 
     def __init__(self):
-        host, port = self._read_server_host_and_port()
-        self.handler = ClientHandler(host, port)
+        self._read_server_host_and_port()
+        self.handler = ClientHandler(self.host, self.port)
         self._load_user_info_if_exists()
+        logging.debug("HIII")
 
     @property
     def _is_registered(self) -> bool:
-        return self.client_id is not None and self.client_name is not None
+        return all([self.client_id, self.client_name, self.private_key])
 
     def _register(self) -> str:
+        import base64
+        from Crypto.PublicKey import RSA
         from protocol.packets.request import RegisterRequest
+
         if os.path.exists(ClientApp.ME_FILENAME):
+            # it was decided not to raise a error so it's easier to use
+            #  and debug the app.
             user_input = input(
-                f"User is already defined in {ClientApp.ME_FILENAME}.\n"
+                f"User info file exist.\n"
                 f"Registering will discard the file content.\n"
                 f"Do you wish to continue (Y/N)? ")
-            if user_input != 'Y':
+            if user_input.upper() != 'Y':
                 return
 
         name = input("Enter your name: ")
-        public_key = input("Enter your public-key: ")
-        public_key_bytes = public_key.encode('ascii')
+
+        key_pair = RSA.generate(1024)
+        public_key = key_pair.publickey()
+        public_key_pem = public_key.exportKey()
+        public_key_string = public_key_pem.decode('ascii')
+        print(f"N: {key_pair.d}")
+        private_key_bytes = key_pair.d.to_bytes(
+            length=128, byteorder='little', signed=False)
+        private_key_b64 = base64.b64encode(private_key_bytes).decode()
+
         request = RegisterRequest()
-        fields_to_pack = {'client_name': name, 'public_key': public_key_bytes}
+        fields_to_pack = {'client_name': name, 'public_key': public_key_string}
         response_fields = self.handler.handle(request, fields_to_pack)
 
         # TODO: rename / refactor different client_id fields
@@ -71,72 +103,110 @@ class ClientApp:
             file.write(
                 f"{name}\n"
                 f"{hex(client_id)}\n"
-                f"{public_key}\n"
+                f"{private_key_b64!s}\n"
             )
+
         self.client_name = name
         self.client_id = client_id
-        self.client_public_key = public_key
-        return f"Successfully registered '{name}' " \
-               f"with public-key {public_key[10:]}...\n" \
+        self.private_key = key_pair.d
+
+        return f"Successfully registered '{name}'. " \
                f"Your ID is {client_id}."
 
     def _list_clients(self) -> str:
         from protocol.packets.request import ListClientsRequest
+
         request = ListClientsRequest()
         fields_to_pack = {'sender_client_id': self.client_id}
         response_fields = self.handler.handle(request, fields_to_pack)
+
         clients = response_fields['clients']
         if not clients:
             return 'No clients registered yet.'
 
+        # the response length is validated in Unpacker, so we assume that
+        #  len(clients) % 2 == 0, so it can be popped in pairs.
         client_strings = []
         for idx in range(len(clients) // 2):
-            client_id = clients[idx*2]
-            client_name = clients[idx*2 + 1]
+            client_id = clients[idx * 2]
+            client_name = clients[idx * 2 + 1]
             client_strings.append(f'{str(client_id).ljust(10)} {client_name}')
         return '\n'.join(client_strings)
 
     def _get_public_key(self) -> str:
         from protocol.packets.request import PublicKeyRequest
+
         name = input("Enter client name: ")
         request = PublicKeyRequest()
         request_fields = {
             'client_name': name, 'sender_client_id': self.client_id,
         }
         response_fields = self.handler.handle(request, request_fields)
+
         public_key = response_fields['public_key']
         client_id = response_fields['requested_client_id']
         return f"{client_id}: {public_key!s}"
 
     def _pop_messages(self) -> str:
         from protocol.packets.request import PopMessagesRequest
+
         request = PopMessagesRequest()
         fields_to_pack = {'sender_client_id': self.client_id}
         response_fields = self.handler.handle(request, fields_to_pack)
 
-        # if messages.count() == 0:
-        #     return "You don't have any unread messages."
-        #
-        # messages_strings = []
-        # for message in messages:
-        #     other_client_name = message.from_client.name
-        #     # TODO: keys messages should display differently
-        #     message_string = \
-        #         f"From: {other_client_name}\n" \
-        #         f"Content:\n" \
-        #         f"{message.content!s}\n" \
-        #         F"-----<EOM>-----"
-        #     message_string.append(message_string)
-        # return '\n'.join(messages_strings)
+        messages = response_fields['messages']
+        if len(messages) == 0:
+            return "You don't have any unread messages."
 
-    def _push_message(self):
-        name = input("Enter client name: ")
-        message = input("Enter message: ")
+        messages_strings = []
+        for message in messages:
+            other_client_name = message.from_client.name
+            # TODO: keyed messages should display differently
+            message_string = \
+                f"From: {other_client_name}\n" \
+                f"Content:\n" \
+                f"{message.content!s}\n" \
+                F"-----<EOM>-----"
+            message_string.append(message_string)
+        return '\n'.join(messages_strings)
+
+    def _send_message(self):
+        import binascii
+        from Crypto.PublicKey import RSA
+        from Crypto.Cipher import PKCS1_OAEP
+        from protocol.packets.request import PublicKeyRequest, \
+            SendMessageRequest
+        receiver_client_id = input("Enter client id: ")
         try:
-            pass
-            # TODO: send request
-        except Exception:
-            pass
+            receiver_client_id = int(receiver_client_id)
+        except ValueError:
+            raise exceptions.ClientValidationError(
+                f"Invalid client ID: {receiver_client_id}")
+        message = input("Enter message: ")
+
+        request = PublicKeyRequest()
+        request_fields = {
+            'client_name': self.client_name,
+            'sender_client_id': self.client_id,
+        }
+        response_fields = self.handler.handle(request, request_fields)
+        public_key = response_fields['public_key']
+
+        encryptor = PKCS1_OAEP.new(RSA.importKey(public_key))
+        encrypted = encryptor.encrypt(message.encode())
+        print(encrypted)
+        print("Encrypted:", binascii.hexlify(encrypted))
+
+        request = SendMessageRequest()
+        request_fields = {
+            'receiver_client_id': receiver_client_id,
+            'sender_client_id': self.client_id,
+            'encrypted_message': encrypted,
+        }
+        response_fields = self.handler.handle(request, request_fields)
+        receiver_client_id = response_fields['receiver_client_id']
+        message_id = response_fields['message_id']
+        return f"Message {message_id} sent to client {receiver_client_id}."
 
     def _push_file(self):
         name = input("Enter client name: ")
@@ -175,7 +245,7 @@ class ClientApp:
         2: _list_clients,
         3: _get_public_key,
         4: _pop_messages,
-        5: _push_message,
+        5: _send_message,
         50: _push_file,
         51: _request_symmetric_key,
         52: _respond_with_symmetric_key,
@@ -223,7 +293,9 @@ class ClientApp:
 
             action = ClientApp.OPTION_CODE_TO_ACTION.get(
                 selected_option, ClientApp._wrong_option)
-            if action != self._register and not self._is_registered:
+            if action.__name__ != '_register' and not self._is_registered:
+                print(action)
+                print(self._register)
                 last_command_output = "Please register."
             else:
                 last_command_output = action(self)
