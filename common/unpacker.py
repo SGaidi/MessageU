@@ -28,37 +28,30 @@ class Unpacker:
         fields = OrderedDict()
         expected_sizes = {}
         for field in expected_fields:
+            logging.debug(f"Unpacking {field}")
             field_value = field.unpack(bytes_iter)
+            logging.debug(f"field.unpack result: {field_value}")
             if field_value == float('inf'):
                 field_value = expected_sizes[field.name]
             fields[field.name] = field_value
+            print(f"value: {field_value}")
             if field.name.endswith('_size'):
                 expected_sizes[field.name] = field_value
         return fields
-
-    def _validate_payload_length(
-            self, payload: bytes, expected_payload_length: int,
-    ) -> None:
-        if len(payload) != expected_payload_length:
-            raise UnpackerValueError(
-                self,
-                f"Payload length is {len(payload)}, "
-                f"expected {expected_payload_length}.")
 
     def unpack_header(self, header: bytes) -> FieldsValues:
         self._validate_header_length(header)
         header_iter = iter(header)
         return self._unpack_fields(header_iter, self.packet.header_fields)
 
-    def unpack_payload(
-            self, header_fields: FieldsValues, payload: bytes,
-    ) -> FieldsValues:
-        expected_payload_length = header_fields['payload_size']
-        logging.debug(f'expected: {expected_payload_length}')
-
-        self._validate_payload_length(payload, expected_payload_length)
-        packet_iter = iter(payload)
-
+    def unpack_payload(self, payload_iter: bytes,) -> FieldsValues:
         payload_fields = \
-            self._unpack_fields(packet_iter, self.packet.payload_fields)
+            self._unpack_fields(payload_iter, self.packet.payload_fields)
         return payload_fields
+
+    def unpack_message(self, message_iter: bytes, message_size: int) -> FieldsValues:
+        from protocol.fields.message import MessageContent
+        message_fields = \
+            self._unpack_fields(message_iter,
+                                (MessageContent(length=message_size), ))
+        return message_fields

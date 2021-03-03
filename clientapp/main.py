@@ -61,7 +61,6 @@ class ClientApp:
         self._read_server_host_and_port()
         self.handler = ClientHandler(self.host, self.port)
         self._load_user_info_if_exists()
-        logging.debug("HIII")
 
     @property
     def _is_registered(self) -> bool:
@@ -145,7 +144,7 @@ class ClientApp:
 
         public_key = response_fields['public_key']
         client_id = response_fields['requested_client_id']
-        return f"{client_id}: {public_key!s}"
+        return f"Client ID: {client_id}\n{public_key!s}"
 
     def _pop_messages(self) -> str:
         from protocol.packets.request import PopMessagesRequest
@@ -201,12 +200,13 @@ class ClientApp:
         request_fields = {
             'receiver_client_id': receiver_client_id,
             'sender_client_id': self.client_id,
-            'encrypted_message': encrypted,
+            'content': encrypted,
         }
         response_fields = self.handler.handle(request, request_fields)
         receiver_client_id = response_fields['receiver_client_id']
         message_id = response_fields['message_id']
-        return f"Message {message_id} sent to client {receiver_client_id}."
+        return f"Message {message_id} sent to client with ID " \
+               f"{receiver_client_id}."
 
     def _push_file(self):
         name = input("Enter client name: ")

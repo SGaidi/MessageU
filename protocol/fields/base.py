@@ -45,9 +45,7 @@ class FieldBase(metaclass=abc.ABCMeta):
                     f"{self.value!r}.")
 
     @abc.abstractmethod
-    def unpack(
-            self, bytes_iter: Iterator[bytes], bytes_length: int,
-    ) -> TYPE: pass
+    def unpack(self, bytes_iter: Iterator[bytes]) -> TYPE: pass
 
 
 class SequenceMixin:
@@ -124,9 +122,7 @@ class UnboundedString(String, metaclass=abc.ABCMeta):
         self._validate_field_to_pack(field)
         return field.encode()
 
-    def unpack(
-            self, bytes_iter: Iterator[bytes], bytes_length: int,
-    ) -> str:
+    def unpack(self, bytes_iter: Iterator[bytes]) -> str:
         return bytes(bytes_iter).decode()
 
 

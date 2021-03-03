@@ -98,7 +98,6 @@ class ServerHandler(HandlerBase, socketserver.BaseRequestHandler):
         }
 
     def _push_message(self, fields: FieldsValues):
-        # 'receiver_client_id', 5), ('message_type', 3), ('content_size', 17)
         sender_client_id = fields['sender_client_id']
         receiver_client_id = fields['receiver_client_id']
         try:
@@ -108,14 +107,20 @@ class ServerHandler(HandlerBase, socketserver.BaseRequestHandler):
             raise exceptions.MessageValidationError(
                 f"Invalid IDs {sender_client_id}, {receiver_client_id}: {e!r}."
             )
+        content = fields['content']
+
         try:
             message = Message.objects.create(
                 message_type=fields['message_type'],
                 from_client=sender_client,
                 to_client=receiver_client,
+                content=content,
             )
         except ValidationError as e:
-            raise exceptions.MessageValidationError()
+            raise exceptions.MessageValidationError(e)
+
+        return {'receiver_client_id': receiver_client_id,
+                'message_id': message.id}
 
     def handle(self) -> None:
         from protocol.packets.response import ErrorResponse

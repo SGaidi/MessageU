@@ -1,5 +1,7 @@
+from typing import Iterator
+
 from protocol.fields.base import Int, ClientID, UnboundedBytes, \
-    BoundedBytes, Compound
+    BoundedMixin, Compound, Bytes
 from protocol.fields.header import SenderClientID
 
 
@@ -19,50 +21,47 @@ class MessageType(Int):
 
 class MessageContentSize(Int):
 
-    def __init__(self, message_content_size: int):
-        super(MessageContentSize, self).__init__(
-            name='content_size', value=message_content_size, length=4,
-        )
-
-
-class MessageContentSize(Int):
-
     def __init__(self, content_size: int = None):
         super(MessageContentSize, self).__init__(
             name='content_size', value=content_size, length=4,
         )
 
 
-class EncryptedSymmetricKey(BoundedBytes):
+class MessageContent(Bytes):
 
-    def __init__(self):
+    def __init__(self, content: bytes = None, length: int = float('inf')):
+        super(MessageContent, self).__init__(
+            name='content', value=content, length=length)
+        
+    def unpack(self, bytes_iter: Iterator[bytes]) -> Bytes.TYPE:
+        return bytes(bytes_iter)
+
+
+class EncryptedSymmetricKey(MessageContent, BoundedMixin):
+
+    def __init__(self, encrypted_key: bytes = None):
         super(EncryptedSymmetricKey, self).__init__(
-            name='encrypted_symmetric_key', length=16,
+            content=encrypted_key, length=16,
         )
 
 
-class EncryptedMessageContent(UnboundedBytes):
+class EncryptedMessageContent(MessageContent):
 
-    def __init__(self):
+    def __init__(self, encrypted_message: bytes = None):
         super(EncryptedMessageContent, self).__init__(
-            name='encrypted_message',
-        )
+            content=encrypted_message)
 
 
-class EncryptedFileContent(UnboundedBytes):
+class EncryptedFileContent(MessageContent):
 
-    def __init__(self):
-        super(EncryptedFileContent, self).__init__(
-            name='encrypted_file',
-        )
+    def __init__(self, encrypted_file: bytes = None):
+        super(EncryptedFileContent, self).__init__(content=encrypted_file)
 
 
 class MessageID(Int):
 
     def __init__(self):
-        super(MessageID, self).__init__(
-            name='message_id', length=5,
-        )
+        super(MessageID, self).__init__(name='message_id', length=5)
 
 
 class Messages(Compound):

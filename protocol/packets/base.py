@@ -52,6 +52,8 @@ class PacketBase(metaclass=abc.ABCMeta):
     def __init__(self, payload_size: Optional[int] = CALCULATE_PAYLOAD_SIZE):
         self.header_fields = deepcopy(self.HEADER_FIELDS_TEMPLATE)
         if payload_size == self.CALCULATE_PAYLOAD_SIZE:
+            payload_str = ', '.join(str(f) for f in self.payload_fields)
+            print(payload_str)
             payload_size = self._length_of_fields(self.payload_fields)
         logging.debug(f'init pay size: {payload_size}')
         self._update_header_value('payload_size', payload_size)

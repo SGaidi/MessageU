@@ -5,7 +5,7 @@ from common.utils import FieldsValues
 from common.exceptions import FieldBaseValueError
 from common.unpacker import Unpacker
 from protocol.packets.base import PacketBase
-from protocol.packets.request import Request
+from protocol.packets.request import Request, PushMessageRequest
 from protocol.packets.response import Response
 
 
@@ -35,11 +35,17 @@ class HandlerBase(metaclass=abc.ABCMeta):
         socket.settimeout(2)
 
         received_payload = socket.recv(payload_size)
+        payload_iter = iter(received_payload)
         print(f"received: {received_payload}")
         unpacker.packet = packet_concrete_type
-        payload_fields = \
-            unpacker.unpack_payload(header_fields, received_payload)
+        payload_fields = unpacker.unpack_payload(payload_iter)
         print(f"received payload: {payload_fields}")
         header_fields.update(payload_fields)
+
+        if isinstance(packet_concrete_type, PushMessageRequest):
+            content_size = payload_fields['content_size']
+            message_fields = unpacker.unpack_message(payload_iter, content_size)
+            print(f"message fields: {message_fields}")
+            header_fields.update(message_fields)
 
         return packet_concrete_type, header_fields

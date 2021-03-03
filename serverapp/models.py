@@ -33,5 +33,5 @@ class Message(models.Model):
         help_text="The message sender", on_delete=models.CASCADE)
     # did not use `type` name because it's a Python built-in
     message_type = models.PositiveIntegerField(
-        choices=Request.ALL_MESSAGES_TYPES)
+        choices=[(str(t), t) for t in Request.ALL_MESSAGES_TYPES])
     content = models.TextField(help_text="The message content")

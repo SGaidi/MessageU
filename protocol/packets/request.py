@@ -1,16 +1,14 @@
 import abc
-from typing import Optional, Any
+from typing import Optional
 
-from common.utils import abstractproperty
 from protocol.packets.base import PacketBase
-from protocol.fields.base import Bytes
 
 from protocol.fields.header import Version, RequestCode, PayloadSize, \
     SenderClientID
 from protocol.fields.payload import ClientName, PublicKey
 from protocol.fields.message import MessageType, ReceiverClientID, \
     MessageContentSize, EncryptedSymmetricKey, EncryptedMessageContent, \
-    EncryptedFileContent
+    EncryptedFileContent, MessageContent
 
 
 class Request(PacketBase, metaclass=abc.ABCMeta):
@@ -83,7 +81,7 @@ class PushMessageRequest(Request, metaclass=abc.ABCMeta):
 
     MESSAGE_TYPE: int = None
     # TODO: make MessageContentBaseField?
-    MESSAGE_CONTENT_FIELD: Optional[Bytes] = None
+    MESSAGE_CONTENT_FIELD: Optional[MessageContent] = None
 
     def __init__(self):
         if self.MESSAGE_CONTENT_FIELD is not None:
@@ -96,6 +94,7 @@ class PushMessageRequest(Request, metaclass=abc.ABCMeta):
             MessageContentSize(self.content_size),
         )
         if self.MESSAGE_CONTENT_FIELD is not None:
+            print("content field not none")
             self.payload_fields += (self.MESSAGE_CONTENT_FIELD, )
         print(f"c size: {self.content_size}")
         super(PushMessageRequest, self).__init__()
