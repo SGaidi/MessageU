@@ -1,6 +1,6 @@
 from django.db import models
 
-from protocol.packets.request import Request
+from protocol.packets.request.messages import PushMessageRequest
 
 
 # TODO: add __str__ implementation
@@ -31,7 +31,7 @@ class Message(models.Model):
 
     MessageType = models.IntegerChoices(
         value='MessageType',
-        names=[(str(t), t) for t in Request.ALL_MESSAGES_TYPES],
+        names=[(str(t), t) for t in PushMessageRequest.ALL_MESSAGES_TYPES],
     )
 
     # TODO: add validator

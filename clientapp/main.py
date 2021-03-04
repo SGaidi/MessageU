@@ -4,8 +4,7 @@ from typing import Tuple, Type
 
 from common import exceptions
 from clientapp.handler import ClientHandler
-from protocol.packets.request import PushMessageRequest
-
+from protocol.packets.request.messages import PushMessageRequest
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -57,7 +56,6 @@ class ClientApp:
             byteorder="little",
             signed=False,
         )
-        print(f"P: {self.private_key}")
 
     def __init__(self):
         self._read_server_host_and_port()
@@ -231,7 +229,7 @@ class ClientApp:
                f"{receiver_client_id}."
 
     def _send_message(self):
-        from protocol.packets.request import SendMessageRequest
+        from protocol.packets.request.messages import SendMessageRequest
         receiver_client_id = self._get_client_id()
         # TODO: symmetric key
         public_key = self._get_public_key_of_client(receiver_client_id)
@@ -244,7 +242,7 @@ class ClientApp:
         )
 
     def _send_file(self) -> str:
-        from protocol.packets.request import SendFileRequest
+        from protocol.packets.request.messages import SendFileRequest
         receiver_client_id = self._get_client_id()
         public_key = self._get_public_key_of_client(receiver_client_id)
         pathname = input("Enter pathname: ")
@@ -262,7 +260,7 @@ class ClientApp:
         )
 
     def _get_symmetric_key(self) -> str:
-        from protocol.packets.request import GetSymmetricKeyRequest
+        from protocol.packets.request.messages import GetSymmetricKeyRequest
         receiver_client_id = self._get_client_id()
         return self._send_content(
             request_type=GetSymmetricKeyRequest,
@@ -272,7 +270,7 @@ class ClientApp:
     def _send_symmetric_key(self):
         # from Crypto.Cipher import AES
         from Crypto.Random import get_random_bytes
-        from protocol.packets.request import SendSymmetricKeyRequest
+        from protocol.packets.request.messages import SendSymmetricKeyRequest
         receiver_client_id = self._get_client_id()
         public_key = self._get_public_key_of_client(receiver_client_id)
         aes_key = get_random_bytes(32)  # for AES-256

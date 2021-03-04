@@ -5,14 +5,16 @@ from common.utils import FieldsValues
 from common.exceptions import FieldBaseValueError
 from common.unpacker import Unpacker
 from protocol.packets.base import PacketBase
-from protocol.packets.request import Request, PushMessageRequest
+from protocol.packets.request.base import Request
+from protocol.packets.request.requests import ALL_REQUESTS
+from protocol.packets.request.messages import PushMessageRequest
 from protocol.packets.response import Response
 
 
 class HandlerBase(metaclass=abc.ABCMeta):
 
     def get_concrete_packet_type(self, code: int) -> Type[PacketBase]:
-        for packet in Request.ALL_REQUESTS + Response.ALL_RESPONSES:
+        for packet in ALL_REQUESTS + Response.ALL_RESPONSES:
             if code == packet.CODE:
                 return packet
         raise ValueError(f"Unexpected code {code}!")

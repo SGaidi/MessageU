@@ -10,7 +10,8 @@ from common.handlerbase import HandlerBase
 from common.utils import camel_case_to_snake_case, FieldsValues
 from common.packer import Packer
 from serverapp.models import Client, Message
-from protocol.packets.request import Request, PushMessageRequest
+from protocol.packets.request.base import Request
+from protocol.packets.request.messages import PushMessageRequest
 from protocol.packets.response import Response
 
 

@@ -77,8 +77,7 @@ class ErrorResponse(Response):
 
 Response.ALL_RESPONSES = (
     RegisterResponse, ListClientsResponse, PublicKeyResponse,
-    PushMessageResponse, PopMessagesResponse,
-    ErrorResponse,
+    PushMessageResponse, PopMessagesResponse, ErrorResponse,
 )
 
 
