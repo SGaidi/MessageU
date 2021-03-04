@@ -138,7 +138,7 @@ class SendFileRequest(PushMessageRequest):
     Upon sending, expects a SendFileResponse or ErrorResponse from the server.
     """
 
-    MESSAGE_TYPE = 3
+    MESSAGE_TYPE = 4
     MESSAGE_CONTENT_FIELD = EncryptedFileContent()
 
 
@@ -164,4 +164,5 @@ Request.ALL_MESSAGES = (
     SendFileRequest,
 )
 
-Request.ALL_MESSAGES_TYPES = (message.CODE for message in Request.ALL_MESSAGES)
+Request.ALL_MESSAGES_TYPES = \
+    (message.MESSAGE_TYPE for message in Request.ALL_MESSAGES)

@@ -15,11 +15,12 @@ class ClientApp:
     ME_FILENAME = 'me.info'
     SERVER_FILENAME = 'server.info'
 
-    host: str
-    port: int
+    server_host: str
+    server_port: int
+
     client_name: str = None
     client_id: int = None
-    private_key: bytes = None
+    private_key: int = None
 
     def _read_server_host_and_port(self) -> Tuple[str, int]:
         # TODO: add BASE_URL?
@@ -28,11 +29,11 @@ class ClientApp:
                 content = file.read()
             except IOError as e:
                 raise exceptions.ClientAppEnvironmentException(
-                    f"Could not read port file {ClientApp.SERVER_FILENAME}: "
-                    f"{e}")
+                    f"Could not read server info file "
+                    f"{ClientApp.SERVER_FILENAME}: {e}")
         try:
-            self.host, port = content.strip().split(':')
-            self.port = int(port)
+            self.server_host, server_port = content.strip().split(':')
+            self.server_port = int(server_port)
         except Exception:
             raise exceptions.ServerAppConfigurationError(
                 f"Invalid format: {content!s}.")
@@ -50,8 +51,8 @@ class ClientApp:
                 return
         self.client_name = client_name.strip()
         self.client_id = int(client_id, 16)
-        private_key_bytes = base64.b64decode(private_key_b64.encode())
-        self.private_key = int.from_bytes(
+        private_key_bytes = base64.b64decode(private_key_b64)
+        self.private_key = int.from_bytes(  # noqa # TODO: remove noqa
             bytes=private_key_bytes,
             byteorder="little",
             signed=False,
@@ -60,7 +61,7 @@ class ClientApp:
 
     def __init__(self):
         self._read_server_host_and_port()
-        self.handler = ClientHandler(self.host, self.port)
+        self.handler = ClientHandler(self.server_host, self.server_port)
         self._load_user_info_if_exists()
 
     @property
@@ -73,6 +74,7 @@ class ClientApp:
         from protocol.packets.request import RegisterRequest
 
         if os.path.exists(ClientApp.ME_FILENAME):
+            # TODO: raise error and exit
             # it was decided not to raise a error so it's easier to use
             #  and debug the app.
             user_input = input(

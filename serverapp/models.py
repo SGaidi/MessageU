@@ -9,6 +9,7 @@ from protocol.packets.request import Request
 class Client(models.Model):
 
     # TODO: override tables names?
+    # TODO: move clients id validation here
 
     # Python strings are UTF-8, because ASCII is a subset of UTF-8, it's valid
     name = models.CharField(
@@ -21,9 +22,19 @@ class Client(models.Model):
         help_text="The last date and time the server received a request "
                   "from the client")
 
+    def __str__(self):
+        return f"Client(name='{self.name}', " \
+               f"last_seen={self.last_seen!r})"
+
 
 class Message(models.Model):
 
+    MessageType = models.IntegerChoices(
+        value='MessageType',
+        names=[(str(t), t) for t in Request.ALL_MESSAGES_TYPES],
+    )
+
+    # TODO: add validator
     # id = models.PositiveIntegerField(
     #     primary_key=True, help_text="Unique identifier",
     #     validators=[MaxValueValidator(2 ** 32 - 1)])
@@ -34,6 +45,5 @@ class Message(models.Model):
         Client, related_name='sent_messages',
         help_text="The message sender", on_delete=models.CASCADE)
     # did not use `type` name because it's a Python built-in
-    message_type = models.PositiveIntegerField(
-        choices=[(str(t), t) for t in Request.ALL_MESSAGES_TYPES])
-    content = models.TextField(help_text="The message content")
+    message_type = models.IntegerField(choices=MessageType.choices)
+    content = models.BinaryField(help_text="The message content")

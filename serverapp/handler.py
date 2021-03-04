@@ -107,10 +107,12 @@ class ServerHandler(HandlerBase, socketserver.BaseRequestHandler):
                 f"Invalid IDs {sender_client_id}, {receiver_client_id}: {e!r}."
             )
         content = fields['content']
+        print(f"SERVER got content: {content}")
+        message_type = fields['message_type']
 
         try:
             message = Message.objects.create(
-                message_type=fields['message_type'],
+                message_type=message_type,
                 from_client=sender_client,
                 to_client=receiver_client,
                 content=content,
