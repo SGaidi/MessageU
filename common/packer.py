@@ -32,7 +32,6 @@ class Packer:
 
     def _pack_payload(self, kwargs: FieldsValues) -> bytes:
         payload_bytes = self._pack_fields(self.packet.payload_fields, kwargs)
-        logging.debug(f"pack pay size: {payload_bytes}")
         kwargs['payload_size'] = len(payload_bytes)
         return payload_bytes
 

@@ -27,14 +27,15 @@ class MessageContentSize(Int):
         )
 
 
-class MessageContent(Bytes):
+class MessageContent(Bytes, BoundedMixin):
 
     def __init__(self, content: bytes = None, length: int = float('inf')):
         super(MessageContent, self).__init__(
             name='content', value=content, length=length)
         
     def unpack(self, bytes_iter: Iterator[bytes]) -> Bytes.TYPE:
-        return bytes(bytes_iter)
+        print("MESSAGE CONTENT UNPACK")
+        return self._slice_bytes_iter(bytes_iter)
 
 
 class EncryptedSymmetricKey(MessageContent, BoundedMixin):
@@ -73,6 +74,6 @@ class Messages(Compound):
                 MessageID(),
                 MessageType(),
                 MessageContentSize(),
-                UnboundedBytes(name='message_content'),
+                UnboundedBytes(name='content'),
             )
         )

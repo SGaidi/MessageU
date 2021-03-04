@@ -163,12 +163,12 @@ class ClientApp:
         fields_count = len(Messages().fields)
         for idx in range(len(messages) // fields_count):
             from_client_id = messages[idx * fields_count]
-            message_content = messages[idx * fields_count + 4]
+            content = messages[idx * fields_count + 4]
             # TODO: keyed messages should display differently
             message_string = \
                 f"From: {from_client_id}\n" \
                 f"Content:\n" \
-                f"{message_content!s}\n" \
+                f"{content!s}\n" \
                 F"-----<EOM>-----"
             messages_strings.append(message_string)
         return '\n'.join(messages_strings)

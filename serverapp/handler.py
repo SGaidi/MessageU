@@ -87,13 +87,13 @@ class ServerHandler(HandlerBase, socketserver.BaseRequestHandler):
                 message.id,
                 message.message_type,
                 len(message.content),
-                message.content.encode(),
+                message.content,
             ])
         messages.delete()
 
         return {
             'messages': tuple(messages_tuples),
-            'messages_count': len(messages),
+            'messages_count': len(messages_tuples) // 5,
         }
 
     def _push_message(self, fields: FieldsValues):
@@ -107,7 +107,6 @@ class ServerHandler(HandlerBase, socketserver.BaseRequestHandler):
                 f"Invalid IDs {sender_client_id}, {receiver_client_id}: {e!r}."
             )
         content = fields['content']
-        print(f"SERVER got content: {content}")
         message_type = fields['message_type']
 
         try:
@@ -127,7 +126,7 @@ class ServerHandler(HandlerBase, socketserver.BaseRequestHandler):
         from protocol.packets.response import ErrorResponse
         # TODO: wrap with try and log errors
         try:
-            request_type, fields = self._expect_packet(self.request, Request())
+            request_type, fields, _ = self._expect_packet(self.request, Request())
             request_name = request_type.__class__.__name__[:-7]  # omit 'Request'
             method_name = '_' + camel_case_to_snake_case(request_name)
             response_kwargs = getattr(self, method_name)(fields)

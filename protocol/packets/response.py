@@ -65,9 +65,9 @@ class PopMessagesResponse(Response):
         return sum(field.length for field in self.payload_fields[0].fields)
 
     def pack(self, messages_count: int, **kwargs: FieldsValues) -> bytes:
-        return super(PopMessagesResponse, self).pack(**kwargs)
-        # self.payload_size = self.compound_length * messages_count
+        self.payload_size = self.compound_length * messages_count
         self._update_header_value('payload_size', self.payload_size)
+        return super(PopMessagesResponse, self).pack(**kwargs)
 
 
 class ErrorResponse(Response):

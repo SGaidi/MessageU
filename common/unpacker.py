@@ -55,3 +55,9 @@ class Unpacker:
             self._unpack_fields(message_iter,
                                 (MessageContent(length=message_size), ))
         return message_fields
+
+    def unpack_messages(self, message_iter: bytes) -> FieldsValues:
+        from protocol.fields.message import Messages
+        message_fields = \
+            self._unpack_fields(message_iter, (Messages(), ))
+        return message_fields
