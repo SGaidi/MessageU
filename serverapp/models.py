@@ -1,5 +1,6 @@
 from django.db import models
 
+from protocol.fields.payload import ClientName
 from protocol.packets.request.messages import PushMessageRequest
 
 
@@ -13,9 +14,10 @@ class Client(models.Model):
 
     # Python strings are UTF-8, because ASCII is a subset of UTF-8, it's valid
     name = models.CharField(
-        max_length=255, help_text="Client's provided name", unique=True)
+        max_length=ClientName.LENGTH, unique=True,
+        help_text="Client's provided name")
     public_key = models.TextField(
-        max_length=271,
+        max_length=271,  # Crypto.RSA PEM certificate length
         help_text="Client's provided public-key used in message sending")
     last_seen = models.DateTimeField(
         null=True, blank=True,

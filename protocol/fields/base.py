@@ -222,5 +222,8 @@ class Compound(FieldBase, metaclass=abc.ABCMeta):
 
 class ClientID(Int):
 
+    LENGTH = 16
+
     def __init__(self, name: str, client_id: int = None):
-        super(ClientID, self).__init__(name=name, value=client_id, length=16)
+        super(ClientID, self).__init__(
+            name=name, value=client_id, length=self.LENGTH)

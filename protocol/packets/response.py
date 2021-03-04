@@ -3,10 +3,9 @@ import abc
 from common.utils import FieldsValues
 from protocol.packets.base import PacketBase
 from protocol.fields.header import Version, ResponseCode, PayloadSize
-from protocol.fields.payload import Clients, \
-    RequestedClientID, PublicKey
-from protocol.fields.message import ReceiverClientID, \
-    MessageID, Messages
+from protocol.fields.payload import Clients, RequestedClientID, PublicKey
+from protocol.fields.message import ReceiverClientID, NewClientID, MessageID, \
+    Messages
 
 
 class Response(PacketBase, metaclass=abc.ABCMeta):
@@ -24,7 +23,7 @@ class RegisterResponse(Response):
 
     CODE = 1000
 
-    payload_fields = (ReceiverClientID(), )
+    payload_fields = (NewClientID(), )
 
 
 class ListClientsResponse(Response):

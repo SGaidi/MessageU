@@ -1,7 +1,5 @@
-import mock
 import pytest
 
-from common.utils import FieldsValues
 from clientapp.handler import ClientHandler
 from protocol.fields.message import MessageContent
 from protocol.packets.base import PacketBase

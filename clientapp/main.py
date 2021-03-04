@@ -1,75 +1,109 @@
 import os
 import logging
-from typing import Tuple, Type
+from typing import Tuple, Type, Optional, Dict
 
-from common import exceptions
+from Crypto.Cipher import AES
+
+from common.exceptions import ClientAppException, ClientValidationError
 from clientapp.handler import ClientHandler
 from protocol.packets.request.messages import PushMessageRequest
-
-logging.getLogger().setLevel(logging.DEBUG)
 
 
 class ClientApp:
 
     ME_FILENAME = 'me.info'
     SERVER_FILENAME = 'server.info'
+    AES_256_BLOCK = 16
+    AES_IV = b''.zfill(AES_256_BLOCK)
 
     server_host: str
     server_port: int
 
-    client_name: str = None
-    client_id: int = None
-    private_key: int = None
+    client_name: Optional[str]
+    client_id: Optional[int]
+    private_key: Optional[int]
+    client_ids_to_symmetric_keys: Dict[int, AES.MODE_CBC]
 
-    def _read_server_host_and_port(self) -> Tuple[str, int]:
-        # TODO: add BASE_URL?
+    logger = logging.getLogger(__name__)
+
+    def _read_server_host_and_port(self) -> None:
+        """Tries reading the host and port from SERVER_FILENAME.
+        If fails, raises a ClientAppException."""
         with open(ClientApp.SERVER_FILENAME) as file:
             try:
                 content = file.read()
             except IOError as e:
-                raise exceptions.ClientAppEnvironmentException(
+                raise ClientAppException(
                     f"Could not read server info file "
                     f"{ClientApp.SERVER_FILENAME}: {e}")
         try:
             self.server_host, server_port = content.strip().split(':')
             self.server_port = int(server_port)
         except Exception:
-            raise exceptions.ServerAppConfigurationError(
-                f"Invalid format: {content!s}.")
+            raise ClientAppException(f"Invalid format: {content!s}.")
 
     def _load_user_info_if_exists(self):
+        """Tries loading local user info.
+        If fails to read it, returns.
+        If fails to extract information, raises an error. Because it's assumed
+          the file is written to by the client app."""
         import base64
+        from protocol.fields.base import ClientID
+
         if not os.path.exists(ClientApp.ME_FILENAME):
             return
         with open(ClientApp.ME_FILENAME, 'r') as file:
             try:
                 client_name, client_id, private_key_b64 = file
             except Exception as e:
-                logging.exception(
+                self.logger.warning(
                     f"Could not get info from {ClientApp.ME_FILENAME}: {e!r}")
                 return
-        self.client_name = client_name.strip()
-        self.client_id = int(client_id, 16)
-        private_key_bytes = base64.b64decode(private_key_b64)
-        self.private_key = int.from_bytes(  # noqa # TODO: remove noqa
-            bytes=private_key_bytes,
-            byteorder="little",
-            signed=False,
-        )
+
+        try:
+            self.client_name = client_name.strip()
+            self.client_id = int(client_id, ClientID.LENGTH)
+            private_key_bytes = base64.b64decode(private_key_b64)
+            self.private_key = int.from_bytes(
+                bytes=private_key_bytes,
+                byteorder="little",
+                signed=False,
+            )
+        except Exception:
+            raise ClientAppException(
+                f"Wrong format of {ClientApp.ME_FILENAME}! File corrupted.")
 
     def __init__(self):
         self._read_server_host_and_port()
-        self.handler = ClientHandler(self.server_host, self.server_port)
         self._load_user_info_if_exists()
+        self.handler = ClientHandler(self.server_host, self.server_port)
 
     @property
     def _is_registered(self) -> bool:
+        """Assumes this information is correct."""
         return all([self.client_id, self.client_name, self.private_key])
 
-    def _register(self) -> str:
+    def _generate_key_pair(self) -> Tuple[str, str, int]:
+        """Generates RSA key pair with length=1024, and e=65537 (default).
+
+        Returns a tuple of:
+          Public key PEM certificate, easy to export, import and store in db.
+          Private key b64 encoded, so be kept in ME_FILENAME.
+          Private key int value, loaded in memory for ease of use."""
         import base64
         from Crypto.PublicKey import RSA
-        from protocol.packets.request import RegisterRequest
+
+        key_pair = RSA.generate(1024)
+        public_key = key_pair.publickey()
+        public_key_string = public_key.exportKey().decode('ascii')
+        private_key_bytes = key_pair.d.to_bytes(
+            length=128, byteorder='little', signed=False)
+        private_key_b64_string = base64.b64encode(private_key_bytes).decode()
+
+        return public_key_string, private_key_b64_string, key_pair.d
+
+    def _register(self) -> str:
+        from protocol.packets.request.requests import RegisterRequest
 
         if os.path.exists(ClientApp.ME_FILENAME):
             # TODO: raise error and exit
@@ -83,38 +117,33 @@ class ClientApp:
                 return
 
         name = input("Enter your name: ")
-
-        key_pair = RSA.generate(1024)
-        public_key = key_pair.publickey()
-        public_key_pem = public_key.exportKey()
-        public_key_string = public_key_pem.decode('ascii')
-        print(f"N: {key_pair.d}")
-        private_key_bytes = key_pair.d.to_bytes(
-            length=128, byteorder='little', signed=False)
-        private_key_b64 = base64.b64encode(private_key_bytes).decode()
+        public_key, private_key_str, private_key_int = \
+            self._generate_key_pair()
 
         request = RegisterRequest()
-        fields_to_pack = {'client_name': name, 'public_key': public_key_string}
+        fields_to_pack = {'client_name': name, 'public_key': public_key}
         response_fields = self.handler.handle(request, fields_to_pack)
 
-        # TODO: rename / refactor different client_id fields
-        client_id = response_fields['receiver_client_id']
+        client_id = response_fields['new_client_id']
         with open(ClientApp.ME_FILENAME, 'w+') as file:
             file.write(
                 f"{name}\n"
                 f"{hex(client_id)}\n"
-                f"{private_key_b64!s}\n"
+                f"{private_key_str}\n"
             )
 
         self.client_name = name
         self.client_id = client_id
-        self.private_key = key_pair.d
+        self.private_key = private_key_int
 
         return f"Successfully registered '{name}'. " \
                f"Your ID is {client_id}."
 
     def _list_clients(self) -> str:
-        from protocol.packets.request import ListClientsRequest
+        """Sends a request for registered clients.
+        Formats the returned clients response in a table."""
+        from protocol.fields.payload import Clients
+        from protocol.packets.request.requests import ListClientsRequest
 
         request = ListClientsRequest()
         fields_to_pack = {'sender_client_id': self.client_id}
@@ -124,27 +153,34 @@ class ClientApp:
         if not clients:
             return 'No clients registered yet.'
 
-        # the response length is validated in Unpacker, so we assume that
-        #  len(clients) % 2 == 0, so it can be popped in pairs.
+        # the response length is validated in Packer/Unpacker, so we expect
+        #  that len(clients) % fields_count == 0, so it can be popped
+        #  accordingly.
+        fields_count = len(Clients().fields)
+        assert len(clients) % fields_count == 0
         client_strings = []
-        for idx in range(len(clients) // 2):
-            client_id = clients[idx * 2]
-            client_name = clients[idx * 2 + 1]
+        for idx in range(len(clients) // fields_count):
+            client_id = clients[idx * fields_count]
+            client_name = clients[idx * fields_count + 1]
             client_strings.append(f'{str(client_id).ljust(10)} {client_name}')
         return '\n'.join(client_strings)
 
-    def _get_public_key_of_client(self, receiver_client_id: int) -> bytes:
-        from protocol.packets.request import PublicKeyRequest
+    def _get_public_key_of_client(self, requested_client_id: int) -> bytes:
+        """Sends request for public key, and returns a public key PEM
+          certificate in bytes."""
+        from protocol.packets.request.requests import PublicKeyRequest
+
         request = PublicKeyRequest()
         request_fields = {
-            'requested_client_id': receiver_client_id,
+            'requested_client_id': requested_client_id,
             'sender_client_id': self.client_id,
         }
         response_fields = self.handler.handle(request, request_fields)
+
         return response_fields['public_key']
 
     def _pop_messages(self) -> str:
-        from protocol.packets.request import PopMessagesRequest
+        from protocol.packets.request.requests import PopMessagesRequest
         from protocol.fields.message import Messages
 
         request = PopMessagesRequest()
@@ -156,13 +192,18 @@ class ClientApp:
             return "You don't have any unread messages."
 
         messages_strings = []
-        print(messages)
         assert len(messages) % len(Messages().fields) == 0
         fields_count = len(Messages().fields)
         for idx in range(len(messages) // fields_count):
             from_client_id = messages[idx * fields_count]
             content = messages[idx * fields_count + 4]
-            # TODO: keyed messages should display differently
+            # TODO:
+            # if message_type is get symmetric key:
+            #     content = "Request for symmetric key"
+            # elif message_type is send symmetric key:
+            #     content = "Symmetric key received"
+            # else:  # message OR file
+            #     content = decrypt content with private key
             message_string = \
                 f"From: {from_client_id}\n" \
                 f"Content:\n" \
@@ -172,56 +213,72 @@ class ClientApp:
         return '\n'.join(messages_strings)
 
     def _get_client_id(self) -> int:
+        """Prompt user for receiver client ID, and returns it's int value."""
         receiver_client_id = input("Enter client id: ")
         try:
             receiver_client_id = int(receiver_client_id)
         except ValueError:
-            raise exceptions.ClientValidationError(
-                f"Invalid client ID: {receiver_client_id}")
+            raise ClientValidationError(
+                f"Invalid client ID: {receiver_client_id}.")
         return receiver_client_id
 
     def _get_public_key(self) -> str:
-        from protocol.packets.request import PublicKeyRequest
+        """Prompts user for client ID, requests the public key, and returns
+          string description."""
         requested_client_id = self._get_client_id()
-        request = PublicKeyRequest()
-        request_fields = {
-            'sender_client_id': self.client_id,
-            'requested_client_id': requested_client_id,
-        }
-        response_fields = self.handler.handle(request, request_fields)
-        public_key = response_fields['public_key']
-        client_id = response_fields['requested_client_id']
-        return f"Client ID: {client_id}\n{public_key!s}"
+        public_key = self._get_public_key_of_client(requested_client_id)
+        return f"Client ID: {requested_client_id}\n{public_key!s}"
 
-    def _encrypt_content_with_public_key(
-            self, content: str, public_key: bytes,
+    def _encrypt_with_public_key(
+            self, content: bytes, public_key: bytes,
     ) -> bytes:
-        # TODO: encrypt symmetric
-        import binascii
+        """Import PEM certificate public key bytes, and use it to encrypt
+        content."""
         from Crypto.PublicKey import RSA
         from Crypto.Cipher import PKCS1_OAEP
         encryptor = PKCS1_OAEP.new(RSA.importKey(public_key))
-        encrypted_content = encryptor.encrypt(content.encode())
-        print("Encrypted:", binascii.hexlify(encrypted_content))
-        return encrypted_content
+        return encryptor.encrypt(content.encode())
+
+    def _encrypt_with_symmetric_key(
+            self, content: bytes, requested_client_id: int,
+    ) -> bytes:
+        from common.utils import islice
+        # TODO: pull periodically for get symmetric key request?
+        try:
+            aes_cbc_key = \
+                self.client_ids_to_symmetric_keys[requested_client_id]
+        except KeyError:
+            # TODO: maybe wrap with retry then raise different error?
+            raise ClientAppException(
+                f"Did not yet receive the symmetric key from client with ID "
+                f"{requested_client_id}.")
+        else:
+            encrypted_blocks = []
+            for block in islice(content, ClientApp.AES_256_BLOCK):
+                encrypted_block = aes_cbc_key.encrypt(block)
+                encrypted_blocks.append(encrypted_block)
+            return b''.join(encrypted_blocks)
 
     def _send_content(
             self, request_type: Type[PushMessageRequest],
-            receiver_client_id: int, content: str = None,
-            public_key: bytes = None,
+            receiver_client_id: int, content: Optional[bytes],
+            public_key: Optional[bytes],
     ) -> str:
         request = request_type()
         request_fields = {
             'receiver_client_id': receiver_client_id,
             'sender_client_id': self.client_id,
         }
-        # TODO: change to use symmetric key
-        if content and public_key:
-            request_fields['content'] = self._encrypt_content_with_public_key(
-                content=content, public_key=public_key,
-            )
-        else:
+
+        if content is not None:
             request_fields['content'] = b''
+        elif public_key is not None:
+            request_fields['content'] = self._encrypt_with_public_key(
+                content=content, public_key=public_key)
+        else:
+            request_fields['content'] = self._encrypt_with_symmetric_key(
+                    content=content)
+
         response_fields = self.handler.handle(request, request_fields)
         receiver_client_id = response_fields['receiver_client_id']
         message_id = response_fields['message_id']
@@ -230,33 +287,26 @@ class ClientApp:
 
     def _send_message(self):
         from protocol.packets.request.messages import SendMessageRequest
-        receiver_client_id = self._get_client_id()
-        # TODO: symmetric key
-        public_key = self._get_public_key_of_client(receiver_client_id)
+        requested_client_id = self._get_client_id()
         message = input("Enter message: ")
         return self._send_content(
             request_type=SendMessageRequest,
-            receiver_client_id=receiver_client_id,
-            content=message,
-            public_key=public_key,
+            receiver_client_id=requested_client_id,
+            content=message.encode(),
         )
 
     def _send_file(self) -> str:
         from protocol.packets.request.messages import SendFileRequest
-        receiver_client_id = self._get_client_id()
-        public_key = self._get_public_key_of_client(receiver_client_id)
+        requested_client_id = self._get_client_id()
         pathname = input("Enter pathname: ")
         if not os.path.exists(pathname):
-            raise exceptions.ClientAppInvalidRequestError(
-                f"No file at: {pathname}")
+            raise ClientAppException(f"No file at: {pathname}.")
         with open(pathname, 'r') as file:
             file_content = file.read()
-        # TODO: use symmetric key, not public key
         return self._send_content(
             request_type=SendFileRequest,
-            receiver_client_id=receiver_client_id,
+            receiver_client_id=requested_client_id,
             content=file_content,
-            # public_key=public_key,
         )
 
     def _get_symmetric_key(self) -> str:
@@ -268,18 +318,26 @@ class ClientApp:
         )
 
     def _send_symmetric_key(self):
-        # from Crypto.Cipher import AES
+        """Prompts user for client, gets requested client's public key,
+          generates an AES-CBC key, saves it locally, encrypts the symmetric
+          key with the public key, and sends to the requested client."""
+        from Crypto.Cipher import AES
         from Crypto.Random import get_random_bytes
         from protocol.packets.request.messages import SendSymmetricKeyRequest
-        receiver_client_id = self._get_client_id()
-        public_key = self._get_public_key_of_client(receiver_client_id)
-        aes_key = get_random_bytes(32)  # for AES-256
-        # TODO: use this upon sending messages
-        # iv = b''.zfill(16)
-        # aes_cbc_key = AES.new(key=key, mode=AES.MODE_CBC)#, iv=iv)
+
+        requested_client_id = self._get_client_id()
+        public_key = self._get_public_key_of_client(requested_client_id)
+        aes_key = get_random_bytes(32)  # 32 bytes for AES-256
+        aes_cbc_key = AES.new(
+            key=aes_key,
+            iv=ClientApp.AES_IV,
+            mode=AES.MODE_CBC,
+        )
+        self.client_ids_to_symmetric_keys[requested_client_id] = aes_cbc_key
+
         return self._send_content(
             request_type=SendSymmetricKeyRequest,
-            receiver_client_id=receiver_client_id,
+            receiver_client_id=requested_client_id,
             content=aes_key,
             public_key=public_key,
         )
@@ -311,6 +369,7 @@ class ClientApp:
 
         while True:
 
+            # TODO:
             # self._clear_screen()
             if last_command_output is not None:
                 print(f"*********************************\n"

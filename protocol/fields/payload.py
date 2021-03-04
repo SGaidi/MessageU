@@ -1,11 +1,13 @@
-from protocol.fields.base import String, Compound, Int, \
-    BoundedBytes, ClientID
+from protocol.fields.base import String, Compound, Int, ClientID
 
 
 class ClientName(String):
 
+    LENGTH = 255
+
     def __init__(self):
-        super(ClientName, self).__init__(name='client_name', length=255)
+        super(ClientName, self).__init__(
+            name='client_name', length=self.LENGTH)
 
 
 class PublicKey(String):

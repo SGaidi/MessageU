@@ -1,19 +1,17 @@
 from django.core.exceptions import ValidationError
 
 
+class ClientAppException(ValueError):
+    """Raised when ClientApp raised an exception."""
+    pass
+
+
+
+
+
 class ServerAppEnvironmentError(RuntimeError):
     """Raised when ServerApp resources (files, ports) are unavailable or not
     functioning."""
-    pass
-
-
-class ServerAppConfigurationError(ValueError):
-    """Raised when ServerApp configuration file contents are invalid."""
-    pass
-
-
-class ClientAppEnvironmentException(ValueError):
-    """Raised when ClientApp configuration file contents are invalid."""
     pass
 
 

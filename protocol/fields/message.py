@@ -5,6 +5,12 @@ from protocol.fields.base import Int, ClientID, UnboundedBytes, \
 from protocol.fields.header import SenderClientID
 
 
+class NewClientID(ClientID):
+    
+    def __init__(self):
+        super(NewClientID, self).__init__(name='new_client_id')
+
+
 class ReceiverClientID(ClientID):
 
     def __init__(self):
