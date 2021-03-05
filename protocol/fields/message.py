@@ -1,7 +1,7 @@
 from typing import Iterator
 
 from protocol.fields.base import Int, ClientID, UnboundedBytes, \
-    BoundedMixin, Compound, Bytes
+    BoundedMixin, Compound, Bytes, BoundedBytes
 from protocol.fields.header import SenderClientID
 
 
@@ -27,21 +27,17 @@ class MessageType(Int):
 
 class MessageContentSize(Int):
 
-    def __init__(self, content_size: int = None):
+    def __init__(self, content_size: int = float('inf')):
         super(MessageContentSize, self).__init__(
             name='content_size', value=content_size, length=4,
         )
 
 
-class MessageContent(Bytes, BoundedMixin):
+class MessageContent(BoundedBytes):
 
     def __init__(self, content: bytes = None, length: int = float('inf')):
         super(MessageContent, self).__init__(
             name='content', value=content, length=length)
-        
-    def unpack(self, bytes_iter: Iterator[bytes]) -> Bytes.TYPE:
-        print("MESSAGE CONTENT UNPACK")
-        return self._slice_bytes_iter(bytes_iter)
 
 
 class EncryptedSymmetricKey(MessageContent, BoundedMixin):

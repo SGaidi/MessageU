@@ -62,9 +62,11 @@ class SequenceMixin:
 
 class BoundedMixin:
 
+    length: int
+
     def _slice_bytes_iter(self, bytes_iter: Iterator[bytes]) -> bytes:
         sliced_bytes = bytes(islice(bytes_iter, self.length))
-        if sliced_bytes is b'':
+        if sliced_bytes == b'':
             raise StopIteration
         return sliced_bytes
 
@@ -84,6 +86,7 @@ class Int(FieldBase, BoundedMixin, metaclass=abc.ABCMeta):
 
     def pack(self, field_value: int) -> bytes:
         self._validate_field_to_pack(field_value)
+        print(f"Int.pack: {field_value}")
         return field_value.to_bytes(
             length=self.length,
             byteorder="little",
@@ -137,7 +140,7 @@ class Bytes(FieldBase, SequenceMixin, metaclass=abc.ABCMeta):
 
 class BoundedBytes(Bytes, BoundedMixin, metaclass=abc.ABCMeta):
 
-    def unpack(self, bytes_iter: Iterator[bytes]) -> str:
+    def unpack(self, bytes_iter: Iterator[bytes]) -> bytes:
         field_value = self._slice_bytes_iter(bytes_iter)
         self._validate_static_value(field_value)
         return field_value

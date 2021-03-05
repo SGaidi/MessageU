@@ -52,7 +52,7 @@ class ClientHandler(HandlerBase):
             sock.send(request_bytes)
 
             response = self._request_to_response(request)
-            p_type, fields, payload_iter = self._expect_packet(sock, response)
+            p_type, fields = self._expect_packet(sock, response)
 
             # FIXME: everything is already unpacked in _expect_packet
             # if isinstance(p_type, PopMessagesResponse):

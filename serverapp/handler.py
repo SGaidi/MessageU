@@ -1,6 +1,6 @@
 import logging
 import socketserver
-from typing import Dict, Tuple, Union, NewType, Type
+from typing import Dict, Tuple, Union, NewType, Type, Callable
 from itertools import dropwhile
 
 from django.core.exceptions import ValidationError, ObjectDoesNotExist
@@ -10,9 +10,9 @@ from common.handlerbase import HandlerBase
 from common.utils import camel_case_to_snake_case, FieldsValues
 from common.packer import Packer
 from serverapp.models import Client, Message
+from protocol.packets.base import PacketBase
 from protocol.packets.request.base import Request
 from protocol.packets.request.messages import PushMessageRequest
-from protocol.packets.response.base import Response
 from protocol.packets.response.responses import ALL_RESPONSES
 
 
@@ -20,6 +20,8 @@ class ServerHandler(HandlerBase, socketserver.BaseRequestHandler):
 
     Clients = NewType('Clients', Tuple[Union[int, str], ...])
     Messages = NewType('Messages', Tuple[str, ...])
+
+    logger = logging.getLogger(__name__)
 
     def _register(self, fields: FieldsValues) -> Dict[str, int]:
         clients_count = Client.objects.count()
@@ -106,9 +108,10 @@ class ServerHandler(HandlerBase, socketserver.BaseRequestHandler):
             receiver_client = Client.objects.get(id=receiver_client_id)
         except Exception as e:
             raise exceptions.MessageValidationError(
-                f"Invalid IDs {sender_client_id}, {receiver_client_id}: {e!r}."
+                f"Invalid IDs ({sender_client_id}, {receiver_client_id}): "
+                f"{e!r}."
             )
-        content = fields['content']
+        content = fields.get('content', b'')
         message_type = fields['message_type']
 
         try:
@@ -124,28 +127,39 @@ class ServerHandler(HandlerBase, socketserver.BaseRequestHandler):
         return {'receiver_client_id': receiver_client_id,
                 'message_id': message.id}
 
-    def handle(self) -> None:
-        from protocol.packets.response import ErrorResponse
-        # TODO: wrap with try and log errors
-        try:
-            request_type, fields, _ = self._expect_packet(self.request, Request())
-            request_name = request_type.__class__.__name__[:-7]  # omit 'Request'
-            method_name = '_' + camel_case_to_snake_case(request_name)
-            response_kwargs = getattr(self, method_name)(fields)
-            logging.info(f'result: {response_kwargs}')
-            response_name = request_name + 'Response'
+    def _request_type_to_method_and_response_type(
+            self, request_type: PacketBase,
+    ) -> Tuple[Callable, Type[Request]]:
+        request_name = request_type.__class__.__name__[:-7]  # omit 'Request'
+        response_name = request_name + 'Response'
+        method_name = '_' + camel_case_to_snake_case(request_name)
+        response_type = next(dropwhile(
+            lambda response_t: response_t.__name__ != response_name,
+            ALL_RESPONSES,
+        ))
+        return getattr(self, method_name), response_type
 
-            response_type = next(dropwhile(
-                lambda response_t: response_t.__name__ != response_name,
-                ALL_RESPONSES,
-            ))
-            logging.debug(f"response_kwargs: {response_kwargs}")
+    def handle(self) -> None:
+        from protocol.packets.response.responses import ErrorResponse
+
+        try:
+            # expect a request
+            request_type, fields = self._expect_packet(self.request, Request())
+            self.logger.info(f"{request_type.__class__.__name__}: {fields}")
+            # determine action and response
+            method, response_type = \
+                self._request_type_to_method_and_response_type(request_type)
+            # call corresponding method
+            response_kwargs = method(fields)
+            self.logger.info(f'result: {response_kwargs}')
+            # pack and send a response
             response_bytes = Packer(response_type()).pack(**response_kwargs)
             self.request.send(response_bytes)
-        except Exception as e:
-            logging.exception(e)
+            # log about success
+            client_address = self.client_address[0]
+            self.logger.info(f"Responded to {client_address} successfully.")
+        except OSError as e:  # TODO: remove OSError, this is just for traceback
+            self.logger.exception(e)
+            # pack and send an error response
             error_bytes = Packer(ErrorResponse()).pack()
             self.request.send(error_bytes)
-        else:
-            client_address = self.client_address[0]
-            logging.info(f"Responded to {client_address} successfully.")

@@ -17,23 +17,14 @@ class PushMessageRequest(Request, metaclass=abc.ABCMeta):
     CODE = 103
 
     MESSAGE_TYPE: int = None
-    # TODO: make MessageContentBaseField?
-    MESSAGE_CONTENT_FIELD: Optional[MessageContent] = None
 
     def __init__(self):
-        if self.MESSAGE_CONTENT_FIELD is not None:
-            self.content_size = self.MESSAGE_CONTENT_FIELD.length
-        else:
-            self.content_size = float('inf')
         self.payload_fields = (
             ReceiverClientID(),
             MessageType(self.MESSAGE_TYPE),
-            MessageContentSize(self.content_size),
+            MessageContentSize(),
+            MessageContent()
         )
-        if self.MESSAGE_CONTENT_FIELD is not None:
-            print("content field not none")
-            self.payload_fields += (self.MESSAGE_CONTENT_FIELD, )
-        print(f"c size: {self.content_size}")
         super(PushMessageRequest, self).__init__()
 
 
@@ -55,7 +46,6 @@ class SendSymmetricKeyRequest(PushMessageRequest):
     """
 
     MESSAGE_TYPE = 2
-    MESSAGE_CONTENT_FIELD = EncryptedSymmetricKey()
 
 
 class SendMessageRequest(PushMessageRequest):
@@ -66,7 +56,6 @@ class SendMessageRequest(PushMessageRequest):
     """
 
     MESSAGE_TYPE = 3
-    MESSAGE_CONTENT_FIELD = EncryptedMessageContent()
 
 
 class SendFileRequest(PushMessageRequest):
@@ -76,7 +65,6 @@ class SendFileRequest(PushMessageRequest):
     """
 
     MESSAGE_TYPE = 4
-    MESSAGE_CONTENT_FIELD = EncryptedFileContent()
 
 
 ALL_REQUEST_MESSAGES = (

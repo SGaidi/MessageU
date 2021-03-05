@@ -1,6 +1,6 @@
 import abc
 import logging
-from typing import Type, Tuple, Union
+from typing import Type, Tuple, Union, Iterator
 
 from common.utils import FieldsValues
 from common.exceptions import FieldBaseValueError, PacketBaseValueError
@@ -33,23 +33,25 @@ class HandlerBase(metaclass=abc.ABCMeta):
         """Tries to find te packet associated with the message type from the
           message payload.
         If fails, raises a PacketBaseValueError."""
+        from protocol.fields.message import MessageType
+
         for packet in ALL_REQUEST_MESSAGES + (PushMessageResponse, ):
             if message_type == packet.CODE:
                 return packet
+
         # TODO: MessageValueError?
-        raise PacketBaseValueError(
-            packet, f"Unexpected message type {message_type}!")
+        raise FieldBaseValueError(
+            MessageType(), f"Unexpected message type {message_type}!")
 
     def _expect_packet(
             self, socket, packet: Union[Request, Response],
-    ) -> Tuple[Type[PacketBase], FieldsValues]:
+    ) -> Tuple[PacketBase, FieldsValues]:
         self.logger.info(f"Expecting packet: {packet}.")
         header = socket.recv(packet.HEADER_LENGTH)
         unpacker = Unpacker(packet)
         try:
             header_fields = unpacker.unpack_header(header)
         except FieldBaseValueError as e:
-            # TODO: more specific error, then remove the details
             raise RuntimeError(f"Server responded with general error: {e!r}")
 
         code = header_fields['code']
@@ -59,17 +61,12 @@ class HandlerBase(metaclass=abc.ABCMeta):
         socket.settimeout(2)
 
         received_payload = socket.recv(payload_size)
+        self.logger.info(f"received ({len(received_payload)}: {received_payload}")
         payload_iter = iter(received_payload)
         unpacker.packet = packet_concrete_type
         payload_fields = unpacker.unpack_payload(payload_iter)
         header_fields.update(payload_fields)
+        payload = bytes(payload_iter)
+        assert payload == b'', f"Did not read all the payload ({len(payload)})"
 
-        # TODO: move to server
-        if isinstance(packet_concrete_type, PushMessageRequest):
-            print("UNPACK MESSAGE")
-            content_size = payload_fields['content_size']
-            message_fields = unpacker.unpack_message(payload_iter, content_size)
-            print(f"message fields: {message_fields}")
-            header_fields.update(message_fields)
-
-        return packet_concrete_type, header_fields, payload_iter
+        return packet_concrete_type, header_fields

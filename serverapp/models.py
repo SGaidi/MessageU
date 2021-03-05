@@ -1,7 +1,8 @@
 from django.db import models
 
 from protocol.fields.payload import ClientName
-from protocol.packets.request.messages import PushMessageRequest
+from protocol.packets.request.messages import PushMessageRequest, \
+    ALL_REQUEST_MESSAGES_TYPES
 
 
 # TODO: add __str__ implementation
@@ -33,7 +34,7 @@ class Message(models.Model):
 
     MessageType = models.IntegerChoices(
         value='MessageType',
-        names=[(str(t), t) for t in PushMessageRequest.ALL_MESSAGES_TYPES],
+        names=[(str(t), t) for t in ALL_REQUEST_MESSAGES_TYPES],
     )
 
     # TODO: add validator

@@ -1,5 +1,6 @@
 import os
 import logging
+from dataclasses import dataclass, field
 from typing import Tuple, Type, Optional, Dict
 
 from Crypto.Cipher import AES
@@ -9,6 +10,10 @@ from clientapp.handler import ClientHandler
 from protocol.packets.request.messages import PushMessageRequest
 
 
+logging.getLogger().setLevel(logging.DEBUG)
+
+
+@dataclass
 class ClientApp:
 
     ME_FILENAME = 'me.info'
@@ -20,10 +25,12 @@ class ClientApp:
     server_host: str
     server_port: int
 
-    client_name: Optional[str]
-    client_id: Optional[int]
-    private_key: Optional[int]
+    client_ids_to_public_keys: Dict[int, bytes]
     client_ids_to_symmetric_keys: Dict[int, Type[AES.new]]
+
+    client_name: Optional[str] = None
+    client_id: Optional[int] = None
+    private_key: Optional[int] = None
 
     logger = logging.getLogger(__name__)
 
@@ -37,7 +44,8 @@ class ClientApp:
         except IOError as e:
             raise ClientAppException(
                 f"Could not read server info file "
-                f"{ClientApp.SERVER_FILENAME}: {e}")
+                f"{ClientApp.SERVER_FILENAME}: {e}.")
+
         try:
             cls.server_host, server_port = content.strip().split(':')
             cls.server_port = int(server_port)
@@ -55,31 +63,29 @@ class ClientApp:
 
         if not os.path.exists(ClientApp.ME_FILENAME):
             return
+
         with open(ClientApp.ME_FILENAME, 'r') as file:
             try:
                 client_name, client_id, private_key_b64 = file
-            except Exception as e:
-                cls.logger.warning(
-                    f"Could not get info from {ClientApp.ME_FILENAME}: {e!r}")
-                return
-
-        try:
-            cls.client_name = client_name.strip()
-            cls.client_id = int(client_id, ClientID.LENGTH)
-            private_key_bytes = base64.b64decode(private_key_b64)
-            cls.private_key = int.from_bytes(
-                bytes=private_key_bytes,
-                byteorder="little",
-                signed=False,
-            )
-        except Exception:
-            raise ClientAppException(
-                f"Wrong format of {ClientApp.ME_FILENAME}! File corrupted.")
+                cls.client_name = client_name.strip()
+                cls.client_id = int(client_id, ClientID.LENGTH)
+                private_key_bytes = base64.b64decode(private_key_b64)
+                cls.private_key = int.from_bytes(
+                    bytes=private_key_bytes,
+                    byteorder="little",
+                    signed=False,
+                )
+            except Exception:
+                raise ClientAppException(
+                    f"Wrong format of {ClientApp.ME_FILENAME}! "
+                    f"File corrupted.")
 
     def __init__(self):
         self._read_server_host_and_port()
         self._load_user_info_if_exists()
         self.handler = ClientHandler(self.server_host, self.server_port)
+        self.client_ids_to_public_keys = {}
+        self.client_ids_to_symmetric_keys = {}
 
     @property
     def _is_registered(self) -> bool:
@@ -117,7 +123,7 @@ class ClientApp:
                 f"Registering will discard the file content.\n"
                 f"Do you wish to continue (Y/N)? ")
             if user_input.upper() != 'Y':
-                return ''
+                return "OK. Nothing changed."
 
         name = input("Enter your name: ")
         public_key, private_key_str, private_key_int = \
@@ -169,18 +175,22 @@ class ClientApp:
         return '\n'.join(client_strings)
 
     def _get_public_key_of_client(self, requested_client_id: int) -> bytes:
-        """Sends request for public key, and returns a public key PEM
+        """If a public key is not saved locally for the requested client,
+          sends a request for public key, and saves a public key PEM
           certificate in bytes."""
         from protocol.packets.request.requests import PublicKeyRequest
 
-        request = PublicKeyRequest()
-        request_fields = {
-            'requested_client_id': requested_client_id,
-            'sender_client_id': self.client_id,
-        }
-        response_fields = self.handler.handle(request, request_fields)
+        if requested_client_id not in self.client_ids_to_public_keys:
+            request = PublicKeyRequest()
+            request_fields = {
+                'requested_client_id': requested_client_id,
+                'sender_client_id': self.client_id,
+            }
+            response_fields = self.handler.handle(request, request_fields)
+            self.client_ids_to_public_keys[requested_client_id] = \
+                response_fields['public_key']
 
-        return response_fields['public_key']
+        return self.client_ids_to_public_keys[requested_client_id]
 
     def _get_client_id(self) -> int:
         """Prompt user for receiver client ID, and returns it's int value."""
@@ -279,24 +289,24 @@ class ClientApp:
             'sender_client_id': self.client_id,
         }
 
-        if isinstance(request_type, (SendMessageRequest, SendFileRequest)):
-            assert content is not None, "Can't send an empty message."
-            request_fields['content'] = b''
-        elif isinstance(request_type, SendSymmetricKeyRequest):
+        if isinstance(request, (SendMessageRequest, SendFileRequest, )):
+            assert content != b'', "Can't send an empty message."
+            request_fields['content'] = \
+                self._encrypt_with_symmetric_key(
+                    content=content,  # noqa
+                    requested_client_id=receiver_client_id,
+                )
+        elif isinstance(request, SendSymmetricKeyRequest):
             public_key = self._get_public_key_of_client(receiver_client_id)
             request_fields['content'] = \
                 self._encrypt_symmetric_key_with_public_key(
                     symmetric_key=content,
                     public_key=public_key,
                 )
-        elif isinstance(request_type, GetSymmetricKeyRequest):
-            request_fields['content'] = \
-                self._encrypt_with_symmetric_key(
-                    content=content,  # noqa
-                    requested_client_id=receiver_client_id,
-                )
+        elif isinstance(request, GetSymmetricKeyRequest):
+            request_fields['content'] = b''
         else:
-            raise ClientAppException(f"Unexpected request {request_type}.")
+            raise ClientAppException(f"Unexpected request {request}.")
 
         response_fields = self.handler.handle(request, request_fields)
         receiver_client_id = response_fields['receiver_client_id']
