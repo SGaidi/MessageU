@@ -1,17 +1,8 @@
 from django.core.exceptions import ValidationError
 
 
-class ClientAppException(ValueError):
+class ClientAppException(Exception):
     """Raised when ClientApp raised an exception."""
-    pass
-
-
-
-
-
-class ServerAppEnvironmentError(RuntimeError):
-    """Raised when ServerApp resources (files, ports) are unavailable or not
-    functioning."""
     pass
 
 
@@ -22,11 +13,6 @@ class ClientValidationError(ValidationError):
 
 class MessageValidationError(ValidationError):
     """Raised when Message failed validation upon save."""
-    pass
-
-
-class ClientAppInvalidRequestError(ValueError):
-    """Raised when ClientApp receives invalid request from user."""
     pass
 
 
@@ -56,8 +42,3 @@ class FieldBaseValueError(ValueError):
 
     def __init__(self, field, message: str):
         super(FieldBaseValueError, self).__init__(f"{field!s:}: {message}")
-
-
-class ConnectionException(Exception):
-    """Raised when an exception with connection occurred."""
-    pass

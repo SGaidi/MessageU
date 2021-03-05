@@ -1,5 +1,6 @@
 import pytest
 
+# TOOO: make imports shorter
 from clientapp.handler import ClientHandler
 from protocol.fields.message import MessageContent
 from protocol.packets.base import PacketBase
@@ -9,10 +10,10 @@ from protocol.packets.request.requests import RegisterRequest, \
 from protocol.packets.request.messages import GetSymmetricKeyRequest, \
     SendSymmetricKeyRequest, SendMessageRequest, SendFileRequest, \
     PushMessageRequest
-from protocol.packets.response import RegisterResponse, \
+from protocol.packets.response.responses import RegisterResponse, \
     ListClientsResponse, PublicKeyResponse, PushMessageResponse, \
     PopMessagesResponse
-from protocol.packets.response import Response
+from protocol.packets.response.base import Response
 
 
 @pytest.fixture

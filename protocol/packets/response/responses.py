@@ -1,22 +1,8 @@
-import abc
-
 from common.utils import FieldsValues
-from protocol.packets.base import PacketBase
-from protocol.fields.header import Version, ResponseCode, PayloadSize
 from protocol.fields.payload import Clients, RequestedClientID, PublicKey
 from protocol.fields.message import ReceiverClientID, NewClientID, MessageID, \
     Messages
-
-
-class Response(PacketBase, metaclass=abc.ABCMeta):
-
-    VERSION = 2
-
-    HEADER_FIELDS_TEMPLATE = (
-        Version(VERSION),
-        ResponseCode(),
-        PayloadSize(),
-    )
+from protocol.packets.response.base import Response
 
 
 class RegisterResponse(Response):
@@ -74,10 +60,7 @@ class ErrorResponse(Response):
     CODE = 9000
 
 
-Response.ALL_RESPONSES = (
+ALL_RESPONSES = (
     RegisterResponse, ListClientsResponse, PublicKeyResponse,
     PushMessageResponse, PopMessagesResponse, ErrorResponse,
 )
-
-
-__all__ = [cls.__name__ for cls in Response.ALL_RESPONSES]

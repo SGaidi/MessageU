@@ -12,7 +12,8 @@ from common.packer import Packer
 from serverapp.models import Client, Message
 from protocol.packets.request.base import Request
 from protocol.packets.request.messages import PushMessageRequest
-from protocol.packets.response import Response
+from protocol.packets.response.base import Response
+from protocol.packets.response.responses import ALL_RESPONSES
 
 
 class ServerHandler(HandlerBase, socketserver.BaseRequestHandler):
@@ -136,7 +137,7 @@ class ServerHandler(HandlerBase, socketserver.BaseRequestHandler):
 
             response_type = next(dropwhile(
                 lambda response_t: response_t.__name__ != response_name,
-                Response.ALL_RESPONSES,
+                ALL_RESPONSES,
             ))
             logging.debug(f"response_kwargs: {response_kwargs}")
             response_bytes = Packer(response_type()).pack(**response_kwargs)

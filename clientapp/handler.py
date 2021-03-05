@@ -3,7 +3,8 @@ import logging
 from common.utils import FieldsValues
 from common.handlerbase import HandlerBase
 from protocol.packets.request.base import Request
-from protocol.packets.response import Response
+from protocol.packets.response.base import Response
+from protocol.packets.response.responses import ALL_RESPONSES
 
 
 class ClientHandler(HandlerBase):
@@ -31,7 +32,7 @@ class ClientHandler(HandlerBase):
                 request.__class__.__name__.replace('Request', 'Response')
         response_type = next(dropwhile(
             lambda response_t: response_t.__name__ != response_type_name,
-            Response.ALL_RESPONSES,
+            ALL_RESPONSES,
         ))
         return response_type()
 
@@ -40,6 +41,7 @@ class ClientHandler(HandlerBase):
     ) -> FieldsValues:
         import socket
         from common.packer import Packer
+
         logging.info(f"request: {request}, fields_to_pack: {fields_to_pack}")
         request_bytes = Packer(request).pack(**fields_to_pack)
         logging.info(f"request_bytes: {request_bytes}")

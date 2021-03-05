@@ -79,10 +79,10 @@ class SendFileRequest(PushMessageRequest):
     MESSAGE_CONTENT_FIELD = EncryptedFileContent()
 
 
-PushMessageRequest.ALL_MESSAGES = (
+ALL_REQUEST_MESSAGES = (
     GetSymmetricKeyRequest, SendSymmetricKeyRequest, SendMessageRequest,
     SendFileRequest,
 )
 
-PushMessageRequest.ALL_MESSAGES_TYPES = \
-    (message.MESSAGE_TYPE for message in PushMessageRequest.ALL_MESSAGES)
+ALL_REQUEST_MESSAGES_TYPES = \
+    (message.MESSAGE_TYPE for message in ALL_REQUEST_MESSAGES)

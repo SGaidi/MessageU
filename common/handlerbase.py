@@ -1,36 +1,59 @@
 import abc
+import logging
 from typing import Type, Tuple, Union
 
 from common.utils import FieldsValues
-from common.exceptions import FieldBaseValueError
+from common.exceptions import FieldBaseValueError, PacketBaseValueError
 from common.unpacker import Unpacker
 from protocol.packets.base import PacketBase
 from protocol.packets.request.base import Request
 from protocol.packets.request.requests import ALL_REQUESTS
-from protocol.packets.request.messages import PushMessageRequest
-from protocol.packets.response import Response
+from protocol.packets.request.messages import PushMessageRequest, \
+    ALL_REQUEST_MESSAGES
+from protocol.packets.response.base import Response
+from protocol.packets.response.responses import ALL_RESPONSES, \
+    PushMessageResponse
 
 
 class HandlerBase(metaclass=abc.ABCMeta):
 
-    def get_concrete_packet_type(self, code: int) -> Type[PacketBase]:
-        for packet in ALL_REQUESTS + Response.ALL_RESPONSES:
+    logger = logging.getLogger(__name__)
+
+    def get_packet_type_by_code(self, code: int) -> Type[PacketBase]:
+        """Tries to find te packet associated with the code in the header.
+        If fails, raises a PacketBaseValueError."""
+        for packet in ALL_REQUESTS + ALL_RESPONSES:
             if code == packet.CODE:
                 return packet
-        raise ValueError(f"Unexpected code {code}!")
+        raise PacketBaseValueError(packet, f"Unexpected code {code}!")
+
+    def get_packet_type_by_message_type(
+            self, message_type: int,
+    ) -> Type[Union[PushMessageRequest, PushMessageResponse]]:
+        """Tries to find te packet associated with the message type from the
+          message payload.
+        If fails, raises a PacketBaseValueError."""
+        for packet in ALL_REQUEST_MESSAGES + (PushMessageResponse, ):
+            if message_type == packet.CODE:
+                return packet
+        # TODO: MessageValueError?
+        raise PacketBaseValueError(
+            packet, f"Unexpected message type {message_type}!")
 
     def _expect_packet(
             self, socket, packet: Union[Request, Response],
     ) -> Tuple[Type[PacketBase], FieldsValues]:
+        self.logger.info(f"Expecting packet: {packet}.")
         header = socket.recv(packet.HEADER_LENGTH)
         unpacker = Unpacker(packet)
         try:
             header_fields = unpacker.unpack_header(header)
-        except FieldBaseValueError:
-            raise RuntimeError("Server responded with general error!")
+        except FieldBaseValueError as e:
+            # TODO: more specific error, then remove the details
+            raise RuntimeError(f"Server responded with general error: {e!r}")
 
         code = header_fields['code']
-        packet_concrete_type = self.get_concrete_packet_type(code)()
+        packet_concrete_type = self.get_packet_type_by_code(code)()
         print(f"concrete: {packet_concrete_type}")
         payload_size = header_fields['payload_size']
         socket.settimeout(2)
