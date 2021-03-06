@@ -1,19 +1,26 @@
 import argparse
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     parser = argparse.ArgumentParser(
-        prog="MessageU",
-        description="Run a MessageU server or client",
+        prog='MessageU',
+        description='Run a MessageU server or client',
     )
     parser.add_argument(
-        dest="run", choices=["server", "client"],
+        dest='run', choices=['server', 'client'],
+    )
+    parser.add_argument(
+        dest='verbosity', action='store_true', help='enable debug logging',
     )
     args = parser.parse_args()
 
-    if args.run == "server":
+    if args.verbosity:
+        import logging
+        logging.getLogger().setLevel(logging.DEBUG)
+
+    if args.run == 'server':
         from serverapp import main
-    else:  # args.run == "client":
+    else:  # args.run == 'client':
         from clientapp import main
 
     main.run()

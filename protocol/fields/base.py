@@ -1,4 +1,5 @@
 import abc
+import logging
 from itertools import cycle
 from typing import Type, Iterator, Tuple, Sequence, Any, Optional
 
@@ -10,6 +11,8 @@ class FieldBase(metaclass=abc.ABCMeta):
 
     @abstractproperty
     def TYPE(self) -> Type: pass
+
+    logger = logging.getLogger(__name__)
 
     def __init__(
             self, name: str, length: int, value: Optional[Any] = None,
@@ -42,7 +45,7 @@ class FieldBase(metaclass=abc.ABCMeta):
                 and field_value != self.value:
             raise FieldBaseValueError(
                 self, f"Invalid field value {field_value!r}, expected "
-                    f"{self.value!r}.")
+                      f"{self.value!r}.")
 
     @abc.abstractmethod
     def unpack(self, bytes_iter: Iterator[bytes]) -> TYPE: pass
@@ -65,6 +68,10 @@ class BoundedMixin:
     length: int
 
     def _slice_bytes_iter(self, bytes_iter: Iterator[bytes]) -> bytes:
+        FieldBase.logger.debug(f"_slice_bytes_iter of length {self.length}")
+        if self.length == 0:
+            assert bytes(bytes_iter) == b''
+            return b''
         sliced_bytes = bytes(islice(bytes_iter, self.length))
         if sliced_bytes == b'':
             raise StopIteration
@@ -86,7 +93,6 @@ class Int(FieldBase, BoundedMixin, metaclass=abc.ABCMeta):
 
     def pack(self, field_value: int) -> bytes:
         self._validate_field_to_pack(field_value)
-        print(f"Int.pack: {field_value}")
         return field_value.to_bytes(
             length=self.length,
             byteorder="little",
@@ -141,7 +147,11 @@ class Bytes(FieldBase, SequenceMixin, metaclass=abc.ABCMeta):
 class BoundedBytes(Bytes, BoundedMixin, metaclass=abc.ABCMeta):
 
     def unpack(self, bytes_iter: Iterator[bytes]) -> bytes:
+        self.logger.debug(f"BoundedBytes.unpack")
+        from itertools import tee
+        bytes_iter, bytes_iter_copy = tee(bytes_iter)
         field_value = self._slice_bytes_iter(bytes_iter)
+        self.logger.debug(field_value)
         self._validate_static_value(field_value)
         return field_value
 
@@ -152,7 +162,7 @@ class UnboundedBytes(Bytes, metaclass=abc.ABCMeta):
         super(UnboundedBytes, self).__init__(
             name=name, length=float('inf'))
 
-    def unpack(self, bytes_iter: Iterator[bytes]) -> str:
+    def unpack(self, bytes_iter: Iterator[bytes]) -> bytes:
         return bytes(bytes_iter)
 
 
@@ -183,6 +193,7 @@ class Compound(FieldBase, metaclass=abc.ABCMeta):
 
     def pack(self, fields_values: Tuple[Any]) -> bytes:
         fields_values_iter = iter(fields_values)
+        # TODO: update
         compound_bytes = []
         print(f"compound fields to pack: {self.fields}")
         for field in cycle(self.fields):

@@ -11,12 +11,12 @@ from django.core.management import call_command
 from django.core.management.base import CommandError
 
 
-logging.getLogger().setLevel(logging.DEBUG)
 sys.path.append(pathlib.Path(__file__).resolve().parent)
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'serverdb.settings')
 django.setup()
 
-from common import exceptions
+
+from common.exceptions import ServerAppException
 from serverapp.handler import ServerHandler
 
 
@@ -64,18 +64,17 @@ class ServerApp:
         thread.start()
 
     def _read_port(self) -> int:
-        # TODO: add BASE_URL
         with open(ServerApp.PORT_FILENAME) as file:
             try:
                 content = file.read()
             except IOError as e:
-                raise exceptions.ServerAppEnvironmentException(
+                raise ServerAppException(
                     f"Could not read port file {ServerApp.PORT_FILENAME}: {e}")
 
         try:
             port = int(content.strip())
         except ValueError:
-            raise exceptions.ServerAppConfigurationError(
+            raise ServerAppException(
                 f"Invalid port format: {content}. Should be an integer.")
         return port
 
@@ -83,7 +82,7 @@ class ServerApp:
         self._init_db()
         self._create_superuser()
         self._start_django_server()
-        self.host = '127.0.0.1'  #socket.gethostname()
+        self.host = '127.0.0.1'  # TODO: socket.gethostname()?
         self.port = self._read_port()
 
     def run(self):

@@ -39,12 +39,19 @@ class ClientHandler(HandlerBase):
     def handle(
             self, request: Request, fields_to_pack: FieldsValues,
     ) -> FieldsValues:
+        """Sends a request to server and expects a response.
+
+        Opens a connection to server, sends a request with the fields to pack,
+          waits for a specific response from the server (according to the
+          request).
+        If there was no timeout, unpacks the response, and returns it's fields
+          values. Otherwise, propagates the timeout error."""
         import socket
         from common.packer import Packer
 
-        logging.info(f"request: {request}, fields_to_pack: {fields_to_pack}")
+        self.logger.debug(
+            f"request: {request}, fields_to_pack: {fields_to_pack}")
         request_bytes = Packer(request).pack(**fields_to_pack)
-        logging.info(f"request_bytes: {request_bytes}")
 
         socket.setdefaulttimeout(ClientHandler.SOCKET_TIMEOUT)
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
@@ -53,13 +60,5 @@ class ClientHandler(HandlerBase):
 
             response = self._request_to_response(request)
             p_type, fields = self._expect_packet(sock, response)
-
-            # FIXME: everything is already unpacked in _expect_packet
-            # if isinstance(p_type, PopMessagesResponse):
-            #     print("UNPACK MESSAGES")
-            #     unpacker = Unpacker(p_type)
-            #     messages_fields = unpacker.unpack_messages(payload_iter)
-            #     print(f"messages fields: {messages_fields}")
-            #     fields.update(messages_fields)
 
         return fields

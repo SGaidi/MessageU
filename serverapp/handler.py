@@ -38,7 +38,7 @@ class ServerHandler(HandlerBase, socketserver.BaseRequestHandler):
                 f"Failed to create Client: {e!r}"
             )
         else:
-            return {'receiver_client_id': client.id}
+            return {'new_client_id': client.id}
 
     def _list_clients(
             self, fields: FieldsValues,
@@ -145,19 +145,19 @@ class ServerHandler(HandlerBase, socketserver.BaseRequestHandler):
         try:
             # expect a request
             request_type, fields = self._expect_packet(self.request, Request())
-            self.logger.info(f"{request_type.__class__.__name__}: {fields}")
+            self.logger.debug(f"{request_type.__class__.__name__}: {fields}")
             # determine action and response
             method, response_type = \
                 self._request_type_to_method_and_response_type(request_type)
             # call corresponding method
             response_kwargs = method(fields)
-            self.logger.info(f'result: {response_kwargs}')
+            self.logger.debug(f'result: {response_kwargs}')
             # pack and send a response
             response_bytes = Packer(response_type()).pack(**response_kwargs)
             self.request.send(response_bytes)
             # log about success
             client_address = self.client_address[0]
-            self.logger.info(f"Responded to {client_address} successfully.")
+            self.logger.debug(f"Responded to {client_address} successfully.")
         except OSError as e:  # TODO: remove OSError, this is just for traceback
             self.logger.exception(e)
             # pack and send an error response

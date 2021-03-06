@@ -40,27 +40,6 @@ class MessageContent(BoundedBytes):
             name='content', value=content, length=length)
 
 
-class EncryptedSymmetricKey(MessageContent, BoundedMixin):
-
-    def __init__(self, encrypted_key: bytes = None):
-        super(EncryptedSymmetricKey, self).__init__(
-            content=encrypted_key, length=16,
-        )
-
-
-class EncryptedMessageContent(MessageContent):
-
-    def __init__(self, encrypted_message: bytes = None):
-        super(EncryptedMessageContent, self).__init__(
-            content=encrypted_message)
-
-
-class EncryptedFileContent(MessageContent):
-
-    def __init__(self, encrypted_file: bytes = None):
-        super(EncryptedFileContent, self).__init__(content=encrypted_file)
-
-
 class MessageID(Int):
 
     def __init__(self):
@@ -76,6 +55,6 @@ class Messages(Compound):
                 MessageID(),
                 MessageType(),
                 MessageContentSize(),
-                UnboundedBytes(name='content'),
+                MessageContent(),
             )
         )

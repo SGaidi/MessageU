@@ -3,8 +3,10 @@ import logging
 from typing import Type, Tuple, Union, Iterator
 
 from common.utils import FieldsValues
-from common.exceptions import FieldBaseValueError, PacketBaseValueError
+from common.exceptions import FieldBaseValueError, PacketBaseValueError, \
+    UnpackerValueError
 from common.unpacker import Unpacker
+from protocol.fields.base import Int
 from protocol.packets.base import PacketBase
 from protocol.packets.request.base import Request
 from protocol.packets.request.requests import ALL_REQUESTS
@@ -25,7 +27,7 @@ class HandlerBase(metaclass=abc.ABCMeta):
         for packet in ALL_REQUESTS + ALL_RESPONSES:
             if code == packet.CODE:
                 return packet
-        raise PacketBaseValueError(packet, f"Unexpected code {code}!")
+        raise FieldBaseValueError(Int, "Unexpected code {code}!")
 
     def get_packet_type_by_message_type(
             self, message_type: int,
@@ -46,22 +48,20 @@ class HandlerBase(metaclass=abc.ABCMeta):
     def _expect_packet(
             self, socket, packet: Union[Request, Response],
     ) -> Tuple[PacketBase, FieldsValues]:
-        self.logger.info(f"Expecting packet: {packet}.")
+        self.logger.debug(f"Expecting packet: {packet}.")
         header = socket.recv(packet.HEADER_LENGTH)
         unpacker = Unpacker(packet)
         try:
             header_fields = unpacker.unpack_header(header)
-        except FieldBaseValueError as e:
+        except (UnpackerValueError, FieldBaseValueError) as e:
             raise RuntimeError(f"Server responded with general error: {e!r}")
 
         code = header_fields['code']
         packet_concrete_type = self.get_packet_type_by_code(code)()
-        print(f"concrete: {packet_concrete_type}")
         payload_size = header_fields['payload_size']
-        socket.settimeout(2)
 
         received_payload = socket.recv(payload_size)
-        self.logger.info(f"received ({len(received_payload)}: {received_payload}")
+        self.logger.debug(f"received {len(received_payload)} bytes")
         payload_iter = iter(received_payload)
         unpacker.packet = packet_concrete_type
         payload_fields = unpacker.unpack_payload(payload_iter)

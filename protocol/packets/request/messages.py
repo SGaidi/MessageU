@@ -1,8 +1,6 @@
 import abc
-from typing import Optional
 
-from protocol.fields.message import EncryptedSymmetricKey, \
-    EncryptedMessageContent, EncryptedFileContent, MessageContent, \
+from protocol.fields.message import MessageContent, \
     ReceiverClientID, MessageType, MessageContentSize
 from protocol.packets.request.base import Request
 

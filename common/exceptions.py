@@ -6,6 +6,11 @@ class ClientAppException(Exception):
     pass
 
 
+class ServerAppException(Exception):
+    """Raised when ServerApp raised an exception."""
+    pass
+
+
 class ClientValidationError(ValidationError):
     """Raised when Client failed validation upon save."""
     pass

@@ -19,7 +19,6 @@ class Packer:
     ) -> None:
         for field_to_pack in fields_to_pack:
             if field_to_pack.name == field_name + '_size':
-                self.logger.info(f"Update {field_to_pack} with {field_length}")
                 field_to_pack.value = field_length
 
     def _pack_fields(
@@ -29,13 +28,13 @@ class Packer:
         for field in reversed(fields):
             name = field.name
             field_value = kwargs.pop(name, field.value)
-            self.logger.info(f"Packing {field} with {field_value}")
             field_bytes = field.pack(field_value)
             self._update_field_to_size_field(name, len(field_bytes), fields)
             fields_bytes.append(field_bytes)
         return b''.join(reversed(fields_bytes))
 
     def _pack_payload(self, kwargs: FieldsValues) -> bytes:
+        self.logger.debug(f"pack payload: {kwargs}")
         payload_bytes = self._pack_fields(self.packet.payload_fields, kwargs)
         kwargs['payload_size'] = len(payload_bytes)
         return payload_bytes

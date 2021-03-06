@@ -10,9 +10,6 @@ from clientapp.handler import ClientHandler
 from protocol.packets.request.messages import PushMessageRequest
 
 
-logging.getLogger().setLevel(logging.DEBUG)
-
-
 @dataclass
 class ClientApp:
 
@@ -30,7 +27,7 @@ class ClientApp:
 
     client_name: Optional[str] = None
     client_id: Optional[int] = None
-    private_key: Optional[int] = None
+    private_key: Optional[str] = None  # RSA PEM certificate format
 
     logger = logging.getLogger(__name__)
 
@@ -66,15 +63,10 @@ class ClientApp:
 
         with open(ClientApp.ME_FILENAME, 'r') as file:
             try:
-                client_name, client_id, private_key_b64 = file
+                client_name, client_id, *private_key = file
                 cls.client_name = client_name.strip()
                 cls.client_id = int(client_id, ClientID.LENGTH)
-                private_key_bytes = base64.b64decode(private_key_b64)
-                cls.private_key = int.from_bytes(
-                    bytes=private_key_bytes,
-                    byteorder="little",
-                    signed=False,
-                )
+                cls.private_key = '\n'.join(private_key)
             except Exception:
                 raise ClientAppException(
                     f"Wrong format of {ClientApp.ME_FILENAME}! "
@@ -92,24 +84,20 @@ class ClientApp:
         """Assumes this information is correct."""
         return all([self.client_id, self.client_name, self.private_key])
 
-    def _generate_key_pair(self) -> Tuple[str, str, int]:
+    def _generate_key_pair(self) -> Tuple[str, str]:
         """Generates RSA key pair with length=1024, and e=65537 (default).
 
         Returns a tuple of:
-          Public key PEM certificate, easy to export, import and store in db.
-          Private key b64 encoded, so be kept in ME_FILENAME.
-          Private key int value, loaded in memory for ease of use."""
+          Public key PEM certificate, and private key PEM certificate."""
         import base64
         from Crypto.PublicKey import RSA
 
         key_pair = RSA.generate(1024)
         public_key = key_pair.publickey()
-        public_key_string = public_key.exportKey().decode('ascii')
-        private_key_bytes = key_pair.d.to_bytes(
-            length=128, byteorder='little', signed=False)
-        private_key_b64_string = base64.b64encode(private_key_bytes).decode()
+        public_key_pem = public_key.exportKey('PEM').decode('ascii')
+        private_key_pem = key_pair.exportKey('PEM').decode('ascii')
 
-        return public_key_string, private_key_b64_string, key_pair.d
+        return public_key_pem, private_key_pem
 
     def _register(self) -> str:
         from protocol.packets.request.requests import RegisterRequest
@@ -126,8 +114,7 @@ class ClientApp:
                 return "OK. Nothing changed."
 
         name = input("Enter your name: ")
-        public_key, private_key_str, private_key_int = \
-            self._generate_key_pair()
+        public_key, private_key = self._generate_key_pair()
 
         request = RegisterRequest()
         fields_to_pack = {'client_name': name, 'public_key': public_key}
@@ -138,12 +125,12 @@ class ClientApp:
             file.write(
                 f"{name}\n"
                 f"{hex(client_id)}\n"
-                f"{private_key_str}\n"
+                f"{private_key}\n"
             )
 
         self.client_name = name
         self.client_id = client_id
-        self.private_key = private_key_int
+        self.private_key = private_key
 
         return f"Successfully registered '{name}'. " \
                f"Your ID is {client_id}."
@@ -218,48 +205,65 @@ class ClientApp:
         from Crypto.Cipher import PKCS1_OAEP
 
         encryptor = PKCS1_OAEP.new(RSA.importKey(public_key))
-        return encryptor.encrypt(symmetric_key)
+        e = encryptor.encrypt(symmetric_key)
+        self.logger.debug(f"1) ENC AES: {e}")
+        return e
 
     def _decrypt_symmetric_key_with_private_key(
-            self, encrypted_symmetric_key: bytes, public_key_pem: str,
+            self, encrypted_symmetric_key: bytes,
     ) -> Type[AES.new]:
         from Crypto.PublicKey import RSA
         from Crypto.Cipher import PKCS1_OAEP
         from protocol.fields.payload import PublicKey
 
-        public_key_obj = RSA.importKey(public_key_pem)
-        key_pair = RSA.construct(
-            (public_key_obj.n, PublicKey.E_VALUE, self.private_key))
-        decrypter = PKCS1_OAEP.new(key_pair)
-        symmetric_key = decrypter.decrypt(encrypted_symmetric_key)
+        # public_key = RSA.importKey(public_key_pem.encode('ascii'))
+        privat_key = RSA.importKey(self.private_key.encode('ascii'))
 
-        return AES.new(
+        decrypter = PKCS1_OAEP.new(privat_key)
+        self.logger.debug(f"2) ENC AES ({len(encrypted_symmetric_key)}: {encrypted_symmetric_key}")
+        symmetric_key = decrypter.decrypt(encrypted_symmetric_key)
+        aes_cbc_key = AES.new(
             key=symmetric_key,
             iv=ClientApp.AES_IV,
             mode=AES.MODE_CBC,
         )
+        self.logger.debug(f"decrypted: {symmetric_key}")
+        return aes_cbc_key
 
     def _load_symmetric_key(self, requested_client_id: int) -> Type[AES.new]:
         try:
             return self.client_ids_to_symmetric_keys[requested_client_id]
         except KeyError:
-            raise ClientAppException(
-                f"Did not yet receive the symmetric key from client with ID "
-                f"{requested_client_id}.")
+            raise ClientAppException('Did not get the symmetric key yet.')
 
     def _encrypt_with_symmetric_key(
             self, content: bytes, requested_client_id: int,
     ) -> bytes:
-        # TODO: padding
-        # https://stackoverflow.com/questions/12524994/encrypt-decrypt-using-pycrypto-aes-256
-        from common.utils import islice
+        self.logger.debug(f"Trying to encrypt\n"
+                         f"{content}")
 
-        aes_cbc_key = self._load_symmetric_key(requested_client_id)
+        try:
+            aes_cbc_key = self._load_symmetric_key(requested_client_id)
+        except ClientAppException:
+            self._send_symmetric_key(requested_client_id)
+            aes_cbc_key = self.client_ids_to_symmetric_keys[requested_client_id]
+        self.logger.debug(f"ENC loaded AES key: {aes_cbc_key}")
+
+        # padding
+        BB = ClientApp.AES_256_BLOCK_BYTES
+        length = BB - (len(content) % BB)
+        content += bytes([length]) * length
+        self.logger.debug(f"padded content: {content}")
+        self.logger.debug(f"pad length: {length}")
+
         encrypted_blocks = []
-        for block in islice(content, ClientApp.AES_256_BLOCK_BYTES):
-            encrypted_block = aes_cbc_key.encrypt(block)
+        while len(content) > 0:
+            block_bytes, content = content[:BB], content[BB:]
+            self.logger.debug(f"block: {block_bytes}")
+            encrypted_block = aes_cbc_key.encrypt(block_bytes)
             encrypted_blocks.append(encrypted_block)
 
+        self.logger.debug(f"encrypted blocks: {encrypted_block}")
         return b''.join(encrypted_blocks)
 
     def _decrypt_with_symmetric_key(
@@ -267,47 +271,72 @@ class ClientApp:
     ) -> bytes:
         # TODO: padding
         # https://stackoverflow.com/questions/12524994/encrypt-decrypt-using-pycrypto-aes-256
-        from common.utils import islice
-
         aes_cbc_key = self._load_symmetric_key(requested_client_id)
+        self.logger.debug(f"DEC loaded AES key: {aes_cbc_key}")
+        BB = ClientApp.AES_256_BLOCK_BYTES
+
         decrypted_blocks = []
-        for block in islice(content, ClientApp.AES_256_BLOCK_BYTES):
-            decrypted_block = aes_cbc_key.encrypt(block)
+        while len(content):
+            block_bytes, content = content[:BB], content[BB:]
+            self.logger.debug(f"E block: {block_bytes}")
+            decrypted_block = aes_cbc_key.decrypt(block_bytes)
             decrypted_blocks.append(decrypted_block)
 
-        return b''.join(decrypted_blocks)
+        padding_length = decrypted_blocks[-1][-1]
+        decrypted_content = b''.join(decrypted_blocks)
+        # un-padding
+        return decrypted_content[:-padding_length]
+
+    def _format_content(
+            self, request: PushMessageRequest, receiver_client_id: int,
+            content: bytes = b'',
+    ) -> bytes:
+        from protocol.packets.request.messages import SendMessageRequest, \
+            SendSymmetricKeyRequest, SendFileRequest, GetSymmetricKeyRequest
+        if isinstance(request, (SendMessageRequest, SendFileRequest, )):
+            if content == b'':
+                raise ClientAppException("Can't send an empty message.")
+            return self._encrypt_with_symmetric_key(
+                content=content,  # noqa
+                requested_client_id=receiver_client_id,
+            )
+        elif isinstance(request, SendSymmetricKeyRequest):
+            public_key = self._get_public_key_of_client(receiver_client_id)
+            assert content != b'', "Can't send an empty key."
+            return self._encrypt_symmetric_key_with_public_key(
+                symmetric_key=content,
+                public_key=public_key,
+            )
+        elif isinstance(request, GetSymmetricKeyRequest):
+            # no formatting is needed, just internal validation
+            assert content == b''
+            return content
+        else:
+            raise ClientAppException(f"Unexpected request {request}.")
 
     def _send_content(
             self, request_type: Type[PushMessageRequest],
-            receiver_client_id: int, content: Optional[bytes] = b'',
+            receiver_client_id: int, content: bytes = b'',
     ) -> str:
-        from protocol.packets.request.messages import SendMessageRequest, \
-            SendSymmetricKeyRequest, SendFileRequest, GetSymmetricKeyRequest
+
         request = request_type()
         request_fields = {
             'receiver_client_id': receiver_client_id,
             'sender_client_id': self.client_id,
         }
 
-        if isinstance(request, (SendMessageRequest, SendFileRequest, )):
-            assert content != b'', "Can't send an empty message."
+        try:
             request_fields['content'] = \
-                self._encrypt_with_symmetric_key(
-                    content=content,  # noqa
-                    requested_client_id=receiver_client_id,
+                self._format_content(
+                    request=request,
+                    receiver_client_id=receiver_client_id,
+                    content=content,
                 )
-        elif isinstance(request, SendSymmetricKeyRequest):
-            public_key = self._get_public_key_of_client(receiver_client_id)
-            request_fields['content'] = \
-                self._encrypt_symmetric_key_with_public_key(
-                    symmetric_key=content,
-                    public_key=public_key,
-                )
-        elif isinstance(request, GetSymmetricKeyRequest):
-            request_fields['content'] = b''
-        else:
-            raise ClientAppException(f"Unexpected request {request}.")
+            self.logger.debug(f"formatted content: {request_fields['content']}")
+        except ClientAppException as e:
+            return f"Cannot send {request.__class__.__name__}: {e!r}."
 
+        self.logger.debug(f"request_fields: {request_fields}")
         response_fields = self.handler.handle(request, request_fields)
         receiver_client_id = response_fields['receiver_client_id']
         message_id = response_fields['message_id']
@@ -328,6 +357,8 @@ class ClientApp:
         if len(messages) == 0:
             return "You don't have any unread messages."
 
+        self.logger.debug(f"MESSAGES: {messages}")
+
         messages_strings = []
         assert len(messages) % len(Messages().fields) == 0
         fields_count = len(Messages().fields)
@@ -340,19 +371,17 @@ class ClientApp:
             if message_type == GetSymmetricKeyRequest.MESSAGE_TYPE:
                 content = "Request for symmetric key"
             elif message_type == SendSymmetricKeyRequest.MESSAGE_TYPE:
-                logging.info(
-                    f"Trying to get public key and decrypt symmetric key")
-                public_key = \
-                    str(self._get_public_key_of_client(self.client_id))
                 self.client_ids_to_symmetric_keys[from_client_id] = \
                     self._decrypt_symmetric_key_with_private_key(
                         encrypted_symmetric_key=content,
-                        public_key_pem=public_key,
                     )
                 content = "Symmetric key received"
             else:  # message OR file
-                content = self._decrypt_with_symmetric_key(
-                    content, from_client_id)
+                try:
+                    content = self._decrypt_with_symmetric_key(
+                        content, from_client_id)
+                except ClientAppException as e:
+                    return f"Can't decrypt message: {e!r}."
 
             message_string = \
                 f"From: {from_client_id}\n" \
@@ -367,7 +396,7 @@ class ClientApp:
         from protocol.packets.request.messages import SendMessageRequest
 
         requested_client_id = self._get_client_id()
-        message = input("Enter message: ")
+        message = input("Enter message: ").strip()
 
         return self._send_content(
             request_type=SendMessageRequest,
@@ -401,7 +430,7 @@ class ClientApp:
             receiver_client_id=receiver_client_id,
         )
 
-    def _send_symmetric_key(self):
+    def _send_symmetric_key(self, requested_client_id: Optional[int] = None):
         """Prompts user for client, gets requested client's public key,
           generates an AES-CBC key, saves it locally, encrypts the symmetric
           key with the public key, and sends to the requested client."""
@@ -409,13 +438,15 @@ class ClientApp:
         from Crypto.Random import get_random_bytes
         from protocol.packets.request.messages import SendSymmetricKeyRequest
 
-        requested_client_id = self._get_client_id()
+        if requested_client_id is None:
+            requested_client_id = self._get_client_id()
         aes_key = get_random_bytes(ClientApp.AES_256_KEY_BYTES)
         aes_cbc_key = AES.new(
             key=aes_key,
             iv=ClientApp.AES_IV,
             mode=AES.MODE_CBC,
         )
+        self.logger.debug(f"create AES: {aes_key}")
         self.client_ids_to_symmetric_keys[requested_client_id] = aes_cbc_key
 
         return self._send_content(
