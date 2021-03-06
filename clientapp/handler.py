@@ -25,6 +25,7 @@ class ClientHandler(HandlerBase):
         PushMessageRequests."""
         from itertools import dropwhile
         from protocol.packets.request.messages import PushMessageRequest
+
         if isinstance(request, PushMessageRequest):
             response_type_name = 'PushMessageResponse'
         else:
@@ -34,6 +35,7 @@ class ClientHandler(HandlerBase):
             lambda response_t: response_t.__name__ != response_type_name,
             ALL_RESPONSES,
         ))
+
         return response_type()
 
     def handle(

@@ -1,12 +1,12 @@
-import os
 import logging
-from dataclasses import dataclass, field
+import os
+from dataclasses import dataclass
 from typing import Tuple, Type, Optional, Dict
 
 from Crypto.Cipher import AES
 
-from common.exceptions import ClientAppException, ClientValidationError
 from clientapp.handler import ClientHandler
+from common.exceptions import ClientAppException, ClientValidationError
 from protocol.packets.request.messages import PushMessageRequest
 
 
@@ -15,6 +15,7 @@ class ClientApp:
 
     ME_FILENAME = 'me.info'
     SERVER_FILENAME = 'server.info'
+
     AES_256_BLOCK_BYTES = 16
     AES_256_KEY_BYTES = 32
     AES_IV = b''.zfill(AES_256_BLOCK_BYTES)
@@ -55,7 +56,6 @@ class ClientApp:
         If fails to read it, returns.
         If fails to extract information, raises an error. Because it's assumed
           the file is written to by the client app."""
-        import base64
         from protocol.fields.base import ClientID
 
         if not os.path.exists(ClientApp.ME_FILENAME):
@@ -89,7 +89,6 @@ class ClientApp:
 
         Returns a tuple of:
           Public key PEM certificate, and private key PEM certificate."""
-        import base64
         from Crypto.PublicKey import RSA
 
         key_pair = RSA.generate(1024)
@@ -100,18 +99,18 @@ class ClientApp:
         return public_key_pem, private_key_pem
 
     def _register(self) -> str:
+        """Tries registering a new client to MessageU.
+
+        First checks whether a local user is already defined. If so, raises
+          a ClientAppException.
+        Otherwise, prompts for user name, generates RSA key pair, and send
+          a RegisterRequest to server.
+        If the response was successful, writes the local user details to
+          ME_FILENAME, keeps it in memory, ad returns success message."""
         from protocol.packets.request.requests import RegisterRequest
 
         if os.path.exists(ClientApp.ME_FILENAME):
-            # TODO: raise error and exit
-            # it was decided not to raise a error so it's easier to use
-            #  and debug the app.
-            user_input = input(
-                f"User info file exist.\n"
-                f"Registering will discard the file content.\n"
-                f"Do you wish to continue (Y/N)? ")
-            if user_input.upper() != 'Y':
-                return "OK. Nothing changed."
+            raise ClientAppException(f"User info file already exists.")
 
         name = input("Enter your name: ")
         public_key, private_key = self._generate_key_pair()
@@ -127,10 +126,7 @@ class ClientApp:
                 f"{hex(client_id)}\n"
                 f"{private_key}\n"
             )
-
-        self.client_name = name
-        self.client_id = client_id
-        self.private_key = private_key
+        self._load_user_info_if_exists()
 
         return f"Successfully registered '{name}'. " \
                f"Your ID is {client_id}."
@@ -200,37 +196,34 @@ class ClientApp:
             self, symmetric_key: bytes, public_key: bytes,
     ) -> bytes:
         """Import PEM certificate public key bytes, and use it to encrypt
-        content."""
+          symmetric key.."""
         from Crypto.PublicKey import RSA
         from Crypto.Cipher import PKCS1_OAEP
 
         encryptor = PKCS1_OAEP.new(RSA.importKey(public_key))
-        e = encryptor.encrypt(symmetric_key)
-        self.logger.debug(f"1) ENC AES: {e}")
-        return e
+        return encryptor.encrypt(symmetric_key)
 
     def _decrypt_symmetric_key_with_private_key(
             self, encrypted_symmetric_key: bytes,
     ) -> Type[AES.new]:
+        """Import PEM certificate private key from memory, and use it to
+          decrypt a symmetric key."""
         from Crypto.PublicKey import RSA
         from Crypto.Cipher import PKCS1_OAEP
-        from protocol.fields.payload import PublicKey
 
-        # public_key = RSA.importKey(public_key_pem.encode('ascii'))
-        privat_key = RSA.importKey(self.private_key.encode('ascii'))
-
-        decrypter = PKCS1_OAEP.new(privat_key)
-        self.logger.debug(f"2) ENC AES ({len(encrypted_symmetric_key)}: {encrypted_symmetric_key}")
+        private_key = RSA.importKey(self.private_key.encode('ascii'))
+        decrypter = PKCS1_OAEP.new(private_key)
         symmetric_key = decrypter.decrypt(encrypted_symmetric_key)
         aes_cbc_key = AES.new(
             key=symmetric_key,
             iv=ClientApp.AES_IV,
             mode=AES.MODE_CBC,
         )
-        self.logger.debug(f"decrypted: {symmetric_key}")
+
         return aes_cbc_key
 
     def _load_symmetric_key(self, requested_client_id: int) -> Type[AES.new]:
+        """Tries loading symmetric key of requested client from memory."""
         try:
             return self.client_ids_to_symmetric_keys[requested_client_id]
         except KeyError:
@@ -239,42 +232,39 @@ class ClientApp:
     def _encrypt_with_symmetric_key(
             self, content: bytes, requested_client_id: int,
     ) -> bytes:
-        self.logger.debug(f"Trying to encrypt\n"
-                         f"{content}")
-
+        """Tries loading or creating symmetric key, pad content, and encrypt
+          each block."""
         try:
             aes_cbc_key = self._load_symmetric_key(requested_client_id)
         except ClientAppException:
             self._send_symmetric_key(requested_client_id)
-            aes_cbc_key = self.client_ids_to_symmetric_keys[requested_client_id]
-        self.logger.debug(f"ENC loaded AES key: {aes_cbc_key}")
+            aes_cbc_key = \
+                self.client_ids_to_symmetric_keys[requested_client_id]
+        self.logger.debug(f"Encryptor loaded AES key: {aes_cbc_key}")
 
         # padding
-        BB = ClientApp.AES_256_BLOCK_BYTES
+        BB = ClientApp.AES_256_BLOCK_BYTES  # noqa - shorter name
         length = BB - (len(content) % BB)
         content += bytes([length]) * length
-        self.logger.debug(f"padded content: {content}")
-        self.logger.debug(f"pad length: {length}")
 
+        # encrypt each block
         encrypted_blocks = []
         while len(content) > 0:
             block_bytes, content = content[:BB], content[BB:]
-            self.logger.debug(f"block: {block_bytes}")
             encrypted_block = aes_cbc_key.encrypt(block_bytes)
             encrypted_blocks.append(encrypted_block)
 
-        self.logger.debug(f"encrypted blocks: {encrypted_block}")
         return b''.join(encrypted_blocks)
 
     def _decrypt_with_symmetric_key(
             self, content: bytes, requested_client_id: int,
     ) -> bytes:
-        # TODO: padding
-        # https://stackoverflow.com/questions/12524994/encrypt-decrypt-using-pycrypto-aes-256
+        """Tries loading symmetric key, decrypt each block, and un-pad."""
         aes_cbc_key = self._load_symmetric_key(requested_client_id)
-        self.logger.debug(f"DEC loaded AES key: {aes_cbc_key}")
-        BB = ClientApp.AES_256_BLOCK_BYTES
+        self.logger.debug(f"Decryptor loaded AES key: {aes_cbc_key}")
 
+        # decrypt each block
+        BB = ClientApp.AES_256_BLOCK_BYTES  # noqa - shorter name
         decrypted_blocks = []
         while len(content):
             block_bytes, content = content[:BB], content[BB:]
@@ -282,17 +272,20 @@ class ClientApp:
             decrypted_block = aes_cbc_key.decrypt(block_bytes)
             decrypted_blocks.append(decrypted_block)
 
+        # un-padding
         padding_length = decrypted_blocks[-1][-1]
         decrypted_content = b''.join(decrypted_blocks)
-        # un-padding
         return decrypted_content[:-padding_length]
 
     def _format_content(
             self, request: PushMessageRequest, receiver_client_id: int,
             content: bytes = b'',
     ) -> bytes:
+        """Tries returning formatted content according to the push request
+          type."""
         from protocol.packets.request.messages import SendMessageRequest, \
             SendSymmetricKeyRequest, SendFileRequest, GetSymmetricKeyRequest
+
         if isinstance(request, (SendMessageRequest, SendFileRequest, )):
             if content == b'':
                 raise ClientAppException("Can't send an empty message.")
@@ -318,7 +311,8 @@ class ClientApp:
             self, request_type: Type[PushMessageRequest],
             receiver_client_id: int, content: bytes = b'',
     ) -> str:
-
+        """Tries formatting content, packing fields for request, and expects
+          a PushMessageResponse with the message ID."""
         request = request_type()
         request_fields = {
             'receiver_client_id': receiver_client_id,
@@ -332,42 +326,47 @@ class ClientApp:
                     receiver_client_id=receiver_client_id,
                     content=content,
                 )
-            self.logger.debug(f"formatted content: {request_fields['content']}")
         except ClientAppException as e:
             return f"Cannot send {request.__class__.__name__}: {e!r}."
 
-        self.logger.debug(f"request_fields: {request_fields}")
+        self.logger.debug(f"Sending content: {request_fields}")
         response_fields = self.handler.handle(request, request_fields)
         receiver_client_id = response_fields['receiver_client_id']
         message_id = response_fields['message_id']
+
         return f"Message {message_id} sent to client with ID " \
                f"{receiver_client_id}."
 
     def _pop_messages(self) -> str:
+        """Tries sending a PopMessagesRequest, and returns a string of the
+          received messages."""
         from protocol.packets.request.requests import PopMessagesRequest
         from protocol.fields.message import Messages
         from protocol.packets.request.messages import GetSymmetricKeyRequest, \
-            SendSymmetricKeyRequest
+            SendSymmetricKeyRequest, SendMessageRequest
 
         request = PopMessagesRequest()
         fields_to_pack = {'sender_client_id': self.client_id}
         response_fields = self.handler.handle(request, fields_to_pack)
 
+        # check any messages exist
         messages = response_fields['messages']
+        self.logger.debug(f"Popped messages: {messages}")
         if len(messages) == 0:
             return "You don't have any unread messages."
-
-        self.logger.debug(f"MESSAGES: {messages}")
 
         messages_strings = []
         assert len(messages) % len(Messages().fields) == 0
         fields_count = len(Messages().fields)
+
+        # every iteration goes over one message
         for idx in range(len(messages) // fields_count):
+            # extract needed fields from sequence
             from_client_id = messages[idx * fields_count]
             message_type = messages[idx * fields_count + 2]
             content = messages[idx * fields_count + 4]
 
-            # TODO: split to methods
+            # append message to user according to the message type
             if message_type == GetSymmetricKeyRequest.MESSAGE_TYPE:
                 content = "Request for symmetric key"
             elif message_type == SendSymmetricKeyRequest.MESSAGE_TYPE:
@@ -382,6 +381,9 @@ class ClientApp:
                         content, from_client_id)
                 except ClientAppException as e:
                     return f"Can't decrypt message: {e!r}."
+                # we won't decode file content as it might not be decode-able
+                if message_type == SendMessageRequest.MESSAGE_TYPE:
+                    content = content.decode()
 
             message_string = \
                 f"From: {from_client_id}\n" \
@@ -389,6 +391,7 @@ class ClientApp:
                 f"{content!s}\n" \
                 F"-----<EOM>-----"
             messages_strings.append(message_string)
+
         return '\n'.join(messages_strings)
 
     def _send_message(self):
@@ -446,7 +449,6 @@ class ClientApp:
             iv=ClientApp.AES_IV,
             mode=AES.MODE_CBC,
         )
-        self.logger.debug(f"create AES: {aes_key}")
         self.client_ids_to_symmetric_keys[requested_client_id] = aes_cbc_key
 
         return self._send_content(
@@ -471,6 +473,7 @@ class ClientApp:
 
     def _clear_screen(self):
         from os import name, system
+
         if name == 'nt':  # Windows
             system('cls')
         elif name == 'posix':  # Mac and Linux
@@ -482,8 +485,7 @@ class ClientApp:
 
         while True:
 
-            # TODO:
-            # self._clear_screen()
+            self._clear_screen()
             if last_command_output is not None:
                 print(f"*********************************\n"
                       f"{last_command_output}")
