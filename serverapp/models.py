@@ -10,7 +10,6 @@ from protocol.packets.request.messages import PushMessageRequest, \
 
 class Client(models.Model):
 
-    # TODO: override tables names?
     # TODO: move clients id validation here
 
     # Python strings are UTF-8, because ASCII is a subset of UTF-8, it's valid
@@ -21,7 +20,7 @@ class Client(models.Model):
         max_length=271,  # Crypto.RSA PEM certificate length
         help_text="Client's provided public-key used in message sending")
     last_seen = models.DateTimeField(
-        null=True, blank=True,
+        auto_now_add=True,  # automatically generate upon creation
         help_text="The last date and time the server received a request "
                   "from the client")
 

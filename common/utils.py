@@ -15,8 +15,8 @@ class classproperty(object):
         return self.f(owner)
 
 
-def abstractproperty(func):
-    return property(abc.abstractmethod(func))
+def abstractproperty(func: object) -> object:
+    return property(abc.abstractmethod(func))  # noqa
 
 
 def camel_case_to_snake_case(text: str) -> str:

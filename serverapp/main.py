@@ -24,6 +24,8 @@ class ServerApp:
 
     PORT_FILENAME = 'port.info'
 
+    logger = logging.getLogger(__name__)
+
     class States(enum.Enum):
         OFFLINE, ONLINE = range(2)
 
@@ -31,20 +33,19 @@ class ServerApp:
     messages = []
 
     def _init_db(self) -> None:
-        logging.info("migrate")
+        self.logger.debug("migrate")
         with StringIO() as out:
             call_command("makemigrations", "serverapp", stdout=out)
-            logging.info(out.getvalue())
+            self.logger.debug(out.getvalue())
             call_command("migrate", stdout=out)
-            logging.info(out.getvalue())
+            self.logger.debug(out.getvalue())
             call_command("sqlmigrate", "serverapp", "0001", stdout=out)
 
     def _create_superuser(self) -> None:
         import os
         os.environ.setdefault('DJANGO_SUPERUSER_USERNAME', 'admin')
         os.environ.setdefault('DJANGO_SUPERUSER_PASSWORD', 'admin')
-        os.environ.setdefault('DJANGO_SUPERUSER_EMAIL',
-                              'gaidi.sarah@gmail.com')
+        os.environ.setdefault('DJANGO_SUPERUSER_EMAIL', 'random@gmail.com')
         with StringIO() as out:
             try:
                 call_command("createsuperuser", "--noinput", stdout=out)
@@ -86,7 +87,7 @@ class ServerApp:
         self.port = self._read_port()
 
     def run(self):
-        logging.info(f"Listening on {self.host}:{self.port}")
+        self.logger.debug(f"Listening on {self.host}:{self.port}")
         with socketserver.ThreadingTCPServer(
                 (self.host, self.port), ServerHandler) as server:
             server.serve_forever()

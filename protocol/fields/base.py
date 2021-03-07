@@ -56,6 +56,8 @@ class SequenceMixin:
     @abstractproperty
     def TYPE(self) -> Sequence: pass
 
+    length: int
+
     def _validate_value_expected_length(self, field_value: Sequence) -> None:
         if field_value != float('inf') and len(field_value) > self.length:
             raise FieldBaseValueError(
@@ -70,7 +72,7 @@ class BoundedMixin:
     def _slice_bytes_iter(self, bytes_iter: Iterator[bytes]) -> bytes:
         FieldBase.logger.debug(f"_slice_bytes_iter of length {self.length}")
         if self.length == 0:
-            assert bytes(bytes_iter) == b''
+            assert bytes(bytes_iter) == b''  # noqa
             return b''
         sliced_bytes = bytes(islice(bytes_iter, self.length))
         if sliced_bytes == b'':
@@ -147,11 +149,7 @@ class Bytes(FieldBase, SequenceMixin, metaclass=abc.ABCMeta):
 class BoundedBytes(Bytes, BoundedMixin, metaclass=abc.ABCMeta):
 
     def unpack(self, bytes_iter: Iterator[bytes]) -> bytes:
-        self.logger.debug(f"BoundedBytes.unpack")
-        from itertools import tee
-        bytes_iter, bytes_iter_copy = tee(bytes_iter)
         field_value = self._slice_bytes_iter(bytes_iter)
-        self.logger.debug(field_value)
         self._validate_static_value(field_value)
         return field_value
 
@@ -168,8 +166,7 @@ class UnboundedBytes(Bytes, metaclass=abc.ABCMeta):
 
 class Compound(FieldBase, metaclass=abc.ABCMeta):
 
-    @property
-    def TYPE(self) -> Type: Tuple
+    TYPE = Tuple
 
     def __init__(
             self, fields: Tuple[FieldBase, ...], name: str,

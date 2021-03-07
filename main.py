@@ -10,7 +10,8 @@ if __name__ == '__main__':
         dest='run', choices=['server', 'client'],
     )
     parser.add_argument(
-        dest='verbosity', action='store_true', help='enable debug logging',
+        '-v', dest='verbosity', action='store_true',
+        help='enable debug logging',
     )
     args = parser.parse_args()
 

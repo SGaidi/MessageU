@@ -6,7 +6,7 @@ from serverapp.models import Client, Message
 @admin.register(Client)
 class ClientAdmin(admin.ModelAdmin):
 
-    readonly_fields = ('id', 'name', 'public_key')
+    readonly_fields = ('id', 'name', 'public_key', 'last_seen')
     list_display = readonly_fields
 
 

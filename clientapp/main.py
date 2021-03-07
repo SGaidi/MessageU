@@ -24,7 +24,8 @@ class ClientApp:
     server_port: int
 
     client_ids_to_public_keys: Dict[int, bytes]
-    client_ids_to_symmetric_keys: Dict[int, Type[AES.new]]
+    client_ids_to_aes_keys: Dict[int, bytes]
+    client_ids_to_aes_cbc: Dict[int, AES.new]
 
     client_name: Optional[str] = None
     client_id: Optional[int] = None
@@ -77,7 +78,8 @@ class ClientApp:
         self._load_user_info_if_exists()
         self.handler = ClientHandler(self.server_host, self.server_port)
         self.client_ids_to_public_keys = {}
-        self.client_ids_to_symmetric_keys = {}
+        self.client_ids_to_aes_keys = {}
+        self.client_ids_to_aes_cbc = {}
 
     @property
     def _is_registered(self) -> bool:
@@ -205,7 +207,7 @@ class ClientApp:
 
     def _decrypt_symmetric_key_with_private_key(
             self, encrypted_symmetric_key: bytes,
-    ) -> Type[AES.new]:
+    ) -> AES.new:
         """Import PEM certificate private key from memory, and use it to
           decrypt a symmetric key."""
         from Crypto.PublicKey import RSA
@@ -213,21 +215,26 @@ class ClientApp:
 
         private_key = RSA.importKey(self.private_key.encode('ascii'))
         decrypter = PKCS1_OAEP.new(private_key)
-        symmetric_key = decrypter.decrypt(encrypted_symmetric_key)
-        aes_cbc_key = AES.new(
-            key=symmetric_key,
+        aes_key = decrypter.decrypt(encrypted_symmetric_key)
+        aes_cbc = AES.new(
+            key=aes_key,
             iv=ClientApp.AES_IV,
             mode=AES.MODE_CBC,
         )
 
-        return aes_cbc_key
+        return aes_key, aes_cbc
 
-    def _load_symmetric_key(self, requested_client_id: int) -> Type[AES.new]:
+    def _load_symmetric_key(
+            self, requested_client_id: int,
+    ) -> Tuple[bytes, AES.new]:
         """Tries loading symmetric key of requested client from memory."""
         try:
-            return self.client_ids_to_symmetric_keys[requested_client_id]
+            aes_key = self.client_ids_to_aes_keys[requested_client_id]
+            aes_cbc = self.client_ids_to_aes_cbc[requested_client_id]
         except KeyError:
             raise ClientAppException('Did not get the symmetric key yet.')
+
+        return aes_key, aes_cbc
 
     def _encrypt_with_symmetric_key(
             self, content: bytes, requested_client_id: int,
@@ -235,12 +242,12 @@ class ClientApp:
         """Tries loading or creating symmetric key, pad content, and encrypt
           each block."""
         try:
-            aes_cbc_key = self._load_symmetric_key(requested_client_id)
+            aes_key, aes_cbc = self._load_symmetric_key(requested_client_id)
         except ClientAppException:
             self._send_symmetric_key(requested_client_id)
-            aes_cbc_key = \
-                self.client_ids_to_symmetric_keys[requested_client_id]
-        self.logger.debug(f"Encryptor loaded AES key: {aes_cbc_key}")
+            aes_key = self.client_ids_to_aes_keys[requested_client_id]
+            aes_cbc = self.client_ids_to_aes_cbc[requested_client_id]
+        self.logger.debug(f"Encryptor loaded AES key: {aes_key}")
 
         # padding
         BB = ClientApp.AES_256_BLOCK_BYTES  # noqa - shorter name
@@ -251,8 +258,11 @@ class ClientApp:
         encrypted_blocks = []
         while len(content) > 0:
             block_bytes, content = content[:BB], content[BB:]
-            encrypted_block = aes_cbc_key.encrypt(block_bytes)
+            aes_cbc = AES.new(aes_key, AES.MODE_CBC, ClientApp.AES_IV)
+            encrypted_block = aes_cbc.encrypt(block_bytes)
             encrypted_blocks.append(encrypted_block)
+
+        self.client_ids_to_aes_cbc[requested_client_id] = aes_cbc
 
         return b''.join(encrypted_blocks)
 
@@ -260,8 +270,8 @@ class ClientApp:
             self, content: bytes, requested_client_id: int,
     ) -> bytes:
         """Tries loading symmetric key, decrypt each block, and un-pad."""
-        aes_cbc_key = self._load_symmetric_key(requested_client_id)
-        self.logger.debug(f"Decryptor loaded AES key: {aes_cbc_key}")
+        aes_key, aes_cbc = self._load_symmetric_key(requested_client_id)
+        self.logger.debug(f"Decryptor loaded AES key: {aes_cbc}")
 
         # decrypt each block
         BB = ClientApp.AES_256_BLOCK_BYTES  # noqa - shorter name
@@ -269,8 +279,11 @@ class ClientApp:
         while len(content):
             block_bytes, content = content[:BB], content[BB:]
             self.logger.debug(f"E block: {block_bytes}")
-            decrypted_block = aes_cbc_key.decrypt(block_bytes)
+            aes_cbc = AES.new(aes_key, AES.MODE_CBC, ClientApp.AES_IV)
+            decrypted_block = aes_cbc.decrypt(block_bytes)
             decrypted_blocks.append(decrypted_block)
+
+        self.client_ids_to_aes_cbc[requested_client_id] = aes_cbc
 
         # un-padding
         padding_length = decrypted_blocks[-1][-1]
@@ -370,10 +383,12 @@ class ClientApp:
             if message_type == GetSymmetricKeyRequest.MESSAGE_TYPE:
                 content = "Request for symmetric key"
             elif message_type == SendSymmetricKeyRequest.MESSAGE_TYPE:
-                self.client_ids_to_symmetric_keys[from_client_id] = \
+                aes_key, aes_cbc = \
                     self._decrypt_symmetric_key_with_private_key(
                         encrypted_symmetric_key=content,
                     )
+                self.client_ids_to_aes_keys[from_client_id] = aes_key
+                self.client_ids_to_aes_cbc[from_client_id] = aes_cbc
                 content = "Symmetric key received"
             else:  # message OR file
                 try:
@@ -444,12 +459,14 @@ class ClientApp:
         if requested_client_id is None:
             requested_client_id = self._get_client_id()
         aes_key = get_random_bytes(ClientApp.AES_256_KEY_BYTES)
-        aes_cbc_key = AES.new(
+        aes_cbc = AES.new(
             key=aes_key,
             iv=ClientApp.AES_IV,
             mode=AES.MODE_CBC,
         )
-        self.client_ids_to_symmetric_keys[requested_client_id] = aes_cbc_key
+
+        self.client_ids_to_aes_keys[requested_client_id] = aes_key
+        self.client_ids_to_aes_cbc[requested_client_id] = aes_cbc
 
         return self._send_content(
             request_type=SendSymmetricKeyRequest,
@@ -485,7 +502,7 @@ class ClientApp:
 
         while True:
 
-            self._clear_screen()
+            # self._clear_screen()
             if last_command_output is not None:
                 print(f"*********************************\n"
                       f"{last_command_output}")
@@ -517,7 +534,10 @@ class ClientApp:
             if action.__name__ != '_register' and not self._is_registered:
                 last_command_output = "Please register."
             else:
-                last_command_output = action(self)  # noqa
+                try:
+                    last_command_output = action(self)  # noqa
+                except RuntimeError as e:
+                    last_command_output = str(e)
 
 
 def run():

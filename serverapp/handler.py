@@ -12,7 +12,6 @@ from common.packer import Packer
 from serverapp.models import Client, Message
 from protocol.packets.base import PacketBase
 from protocol.packets.request.base import Request
-from protocol.packets.request.messages import PushMessageRequest
 from protocol.packets.response.responses import ALL_RESPONSES
 
 
@@ -64,23 +63,11 @@ class ServerHandler(HandlerBase, socketserver.BaseRequestHandler):
                 'public_key': client.public_key,
             }
 
-    def _get_symmetric_key_request(self):
-        pass
-
-    def get_concrete_message_type(
-            self, message_type: int,
-    ) -> Type[PushMessageRequest]:
-        for packet in Request.ALL_MESSAGES:
-            if message_type == packet.MESSAGE_TYPE:
-                return packet
-        raise ValueError(f"Unexpected message type {message_type}!")
-
     def _pop_messages(
             self, fields: FieldsValues,
     ) -> Dict[str, Union[int, Messages]]:
         from serverapp.models import Message
-        print("POP MESSAGES")
-        print(fields.items())
+
         sender_client_id = fields['sender_client_id']
         messages = Message.objects.filter(to_client__id=sender_client_id)
 
@@ -140,6 +127,8 @@ class ServerHandler(HandlerBase, socketserver.BaseRequestHandler):
         return getattr(self, method_name), response_type
 
     def handle(self) -> None:
+        from django.utils import timezone
+        from protocol.packets.request.requests import RegisterRequest
         from protocol.packets.response.responses import ErrorResponse
 
         try:
@@ -152,13 +141,20 @@ class ServerHandler(HandlerBase, socketserver.BaseRequestHandler):
             # call corresponding method
             response_kwargs = method(fields)
             self.logger.debug(f'result: {response_kwargs}')
+            # update last seen after valid request
+            if request_type.__class__.__name__ != 'RegisterRequest':
+                print(request_type)
+                print(fields['sender_client_id'])
+                Client.objects.filter(
+                    pk=fields['sender_client_id'],
+                ).update(last_seen=timezone.now())
             # pack and send a response
             response_bytes = Packer(response_type()).pack(**response_kwargs)
             self.request.send(response_bytes)
             # log about success
             client_address = self.client_address[0]
             self.logger.debug(f"Responded to {client_address} successfully.")
-        except OSError as e:  # TODO: remove OSError, this is just for traceback
+        except Exception as e:
             self.logger.exception(e)
             # pack and send an error response
             error_bytes = Packer(ErrorResponse()).pack()
