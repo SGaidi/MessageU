@@ -143,8 +143,6 @@ class ServerHandler(HandlerBase, socketserver.BaseRequestHandler):
             self.logger.debug(f'result: {response_kwargs}')
             # update last seen after valid request
             if request_type.__class__.__name__ != 'RegisterRequest':
-                print(request_type)
-                print(fields['sender_client_id'])
                 Client.objects.filter(
                     pk=fields['sender_client_id'],
                 ).update(last_seen=timezone.now())

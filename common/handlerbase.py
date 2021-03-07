@@ -41,7 +41,6 @@ class HandlerBase(metaclass=abc.ABCMeta):
             if message_type == packet.CODE:
                 return packet
 
-        # TODO: MessageValueError?
         raise FieldBaseValueError(
             MessageType(), f"Unexpected message type {message_type}!")
 

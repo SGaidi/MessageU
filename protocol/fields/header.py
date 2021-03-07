@@ -1,9 +1,6 @@
 from protocol.fields.base import Int, ClientID
 
 
-# TODO: after logic is done, convert some classes to typing?
-
-
 class Version(Int):
 
     def __init__(self, version: int):

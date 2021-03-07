@@ -16,9 +16,6 @@ class PacketBase(metaclass=abc.ABCMeta):
       CODE: Unique packet code. Each concrete packet implementation has a
         different code.
       X_FIELD: Shortcut for creating specific fields.
-    Attributes:
-      header_fields: TODO:
-      payload_fields: TODO:
     """
 
     PacketBase = NewType('PacketBase', type)  # only for type notations

@@ -190,9 +190,8 @@ class Compound(FieldBase, metaclass=abc.ABCMeta):
 
     def pack(self, fields_values: Tuple[Any]) -> bytes:
         fields_values_iter = iter(fields_values)
-        # TODO: update
+
         compound_bytes = []
-        print(f"compound fields to pack: {self.fields}")
         for field in cycle(self.fields):
             try:
                 field_value = next(fields_values_iter)
@@ -206,27 +205,21 @@ class Compound(FieldBase, metaclass=abc.ABCMeta):
                         _field.length = field_value
             field_bytes = field.pack(field_value)
             compound_bytes.append(field_bytes)
-            print(f'{field}: {field_value}')
         return b''.join(compound_bytes)
 
     def unpack(self, bytes_iter: Iterator[bytes]) -> TYPE:
-        print("COMPOUND UNPACK")
         fields_values = []
         for field in cycle(self.fields):
-            print(f"field: {field}")
             try:
                 field_value = field.unpack(bytes_iter)
             except StopIteration:
                 break
             if field.name.endswith('_size'):
-                print("SIZE")
                 assert field_value != float('inf')
                 name_to_update = field.name.replace('_size', '')
-                print(f"update: {name_to_update} => {field_value}")
                 for _field in self.fields:
                     if _field.name == name_to_update:
                         _field.length = field_value
-            print(f"value: {field_value}")
             fields_values.append(field_value)
         return tuple(fields_values)
 

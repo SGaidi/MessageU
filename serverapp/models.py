@@ -5,12 +5,7 @@ from protocol.packets.request.messages import PushMessageRequest, \
     ALL_REQUEST_MESSAGES_TYPES
 
 
-# TODO: add __str__ implementation
-
-
 class Client(models.Model):
-
-    # TODO: move clients id validation here
 
     # Python strings are UTF-8, because ASCII is a subset of UTF-8, it's valid
     name = models.CharField(
@@ -36,10 +31,6 @@ class Message(models.Model):
         names=[(str(t), t) for t in ALL_REQUEST_MESSAGES_TYPES],
     )
 
-    # TODO: add validator
-    # id = models.PositiveIntegerField(
-    #     primary_key=True, help_text="Unique identifier",
-    #     validators=[MaxValueValidator(2 ** 32 - 1)])
     to_client = models.ForeignKey(
         Client, related_name='waiting_messages',
         help_text="The message recipient", on_delete=models.CASCADE)
