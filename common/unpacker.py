@@ -1,5 +1,5 @@
 import logging
-from typing import Iterator, Tuple
+from typing import Iterator, Tuple, Dict
 from collections import OrderedDict
 
 from common.utils import FieldsValues
@@ -34,7 +34,7 @@ class Unpacker:
     def _unpack_fields(
             self, bytes_iter: Iterator[bytes],
             expected_fields: Tuple[FieldBase],
-    ) -> OrderedDict[str, FieldBase]:
+    ) -> Dict[str, FieldBase]:
         fields = OrderedDict()
         for field in expected_fields:
             field_value = field.unpack(bytes_iter)

@@ -3,8 +3,7 @@ from collections import OrderedDict
 from typing import NewType, Union, Dict, Any
 
 
-FieldsValues = NewType('FieldsValues',
-                       Union[OrderedDict[str, Any], Dict[str, Any]])
+FieldsValues = NewType('FieldsValues', dict)
 
 
 class classproperty(object):
